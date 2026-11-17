@@ -143,6 +143,11 @@ code{font-family:var(--mono)}
 .copy.ok{background:var(--ok)}
 .export{background:#1c2438;color:#c3cddf;border:1px solid #2b3550;border-radius:9px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-family:inherit}
 .export:hover{border-color:#3d4a6b;color:#fff}
+.export:disabled{opacity:.65;cursor:progress}
+.zipmsg{display:none;margin-top:10px;padding-top:9px;border-top:1px dashed #2b3550;font-size:12px;line-height:1.75;color:#93a0bd;white-space:pre-wrap;word-break:break-all}
+.zipmsg.show{display:block}
+.zipmsg b{color:#dbe4f3}
+.zipmsg .warn{color:#e0a33e}
 #cmdOut{background:#080d18;border:1px solid #232c44;border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;color:#d5e0f0;overflow:auto;white-space:pre-wrap;word-break:break-all;max-height:220px;line-height:1.7;margin:0}
 
 /* ===== 悬浮按钮与提示 ===== */
@@ -215,12 +220,14 @@ code{font-family:var(--mono)}
             <input type="text" id="root" placeholder="安装根目录（可选）">
             <span class="hint" id="hint"></span>
             <div class="right">
+                <button class="export" id="zipBtn" title="把勾选的技能库打包成 ZIP，可直接在 CC Switch 的「从 ZIP 安装」里导入">下载 ZIP</button>
                 <button class="export" id="exportBtn">导出配置</button>
                 <button class="copy" id="copyBtn">复制命令</button>
                 <button class="x" id="cmdClose" title="关闭（Esc）" aria-label="关闭">×</button>
             </div>
         </div>
         <pre id="cmdOut">（尚未选择任何技能仓）</pre>
+        <div class="zipmsg" id="zipMsg"></div>
     </div>
 </div>
 
@@ -752,6 +759,280 @@ document.getElementById("exportBtn").onclick = () => {
     URL.revokeObjectURL(a.href);
     toast("已导出 wife-legal-selection.json");
 };
+
+// ===== 下载 ZIP：把勾选的技能库打包成可直接导入 CC Switch 的压缩包 =====
+// 目录名沿用部署脚本的规则 wife-legal-<仓库名>-<技能目录名>；CC Switch 的
+// 「从 ZIP 安装」按目录里的 SKILL.md 识别技能，所以每个技能目录都必须带上它。
+const ZIP_ORG = "aukodeng-skill";
+const ZIP_RAW = "https://raw.githubusercontent.com/" + ZIP_ORG + "/";
+const ZIP_CDN = "https://cdn.jsdelivr.net/gh/" + ZIP_ORG + "/";
+const ZIP_TREE = "https://data.jsdelivr.com/v1/packages/gh/" + ZIP_ORG + "/";
+const ZIP_API = "https://api.github.com/repos/" + ZIP_ORG + "/";
+const ZIP_MAX_FILES = 1500;   // 单个仓库的文件数上限，超出的建议改用脚本部署
+const ZIP_POOL = 8;           // 并发下载数
+let zipBusy = false;
+
+// 按需加载 JSZip，避免影响首屏
+function loadJSZip()
+{
+    if (window.JSZip) return Promise.resolve(window.JSZip);
+    return new Promise((resolve, reject) =>
+    {
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+        s.onload = () => resolve(window.JSZip);
+        s.onerror = () => reject(new Error("JSZip 加载失败，请确认能访问 cdn.jsdelivr.net"));
+        document.head.appendChild(s);
+    });
+}
+
+// 结果区：显示打包摘要与跳过原因
+function showZipMsg(html)
+{
+    const el = document.getElementById("zipMsg");
+    el.innerHTML = html;
+    el.classList.toggle("show", !!html);
+}
+
+// 用 GitHub API 读文件清单：先试 main，再试 master，最后查默认分支
+async function fetchTreeByApi(repo)
+{
+    for (const b of ["main", "master"])
+    {
+        const res = await fetch(ZIP_API + repo + "/git/trees/" + b + "?recursive=1");
+        if (res.ok)
+        {
+            const data = await res.json();
+            if (data.truncated) throw new Error("仓库太大，GitHub 只返回了部分文件，请改用脚本部署");
+            return { branch: b, paths: (data.tree || []).filter((e) => e.type === "blob").map((e) => e.path) };
+        }
+        if (res.status === 403 || res.status === 429) throw new Error("RATE_LIMIT");
+    }
+    const info = await fetch(ZIP_API + repo);
+    if (!info.ok) throw new Error("读不到仓库信息（HTTP " + info.status + "）");
+    const def = (await info.json()).default_branch || "main";
+    const res = await fetch(ZIP_API + repo + "/git/trees/" + def + "?recursive=1");
+    if (!res.ok) throw new Error("读不到文件清单（HTTP " + res.status + "）");
+    const data = await res.json();
+    if (data.truncated) throw new Error("仓库太大，GitHub 只返回了部分文件，请改用脚本部署");
+    return { branch: def, paths: (data.tree || []).filter((e) => e.type === "blob").map((e) => e.path) };
+}
+
+// 用 jsdelivr 读文件清单：没有速率限制，作为 GitHub API 限速时的备选（内容可能有缓存延迟）
+async function fetchTreeByCdn(repo)
+{
+    for (const b of ["main", "master"])
+    {
+        const res = await fetch(ZIP_TREE + repo + "@" + b + "?structure=flat");
+        if (!res.ok) continue;
+        const data = await res.json();
+        const paths = (data.files || [])
+            .map((f) => String(f.name || "").replace(/^\//, ""))
+            .filter((p) => p);
+        if (paths.length) return { branch: b, paths: paths };
+    }
+    throw new Error("读不到文件清单");
+}
+
+// 优先 GitHub API（内容最新），限速时自动改用 jsdelivr
+async function loadRepoFiles(repo)
+{
+    try
+    {
+        return await fetchTreeByApi(repo);
+    }
+    catch (err)
+    {
+        if (err.message !== "RATE_LIMIT") throw err;
+        return await fetchTreeByCdn(repo);
+    }
+}
+
+// 挑出技能目录：含 SKILL.md 的最外层目录，父目录已是技能目录时不再单列
+function pickSkillDirs(paths)
+{
+    const dirs = new Set();
+    paths.forEach((p) =>
+    {
+        if (!/(^|\/)SKILL\.md$/i.test(p)) return;
+        dirs.add(p.replace(/\/?SKILL\.md$/i, ""));
+    });
+    return Array.from(dirs).filter((d) =>
+    {
+        if (d === "") return true;
+        const parts = d.split("/");
+        for (let i = 1; i < parts.length; i++)
+        {
+            if (dirs.has(parts.slice(0, i).join("/"))) return false;
+        }
+        return true;
+    });
+}
+
+// 技能目录下的全部文件（rel 为 zip 内的相对路径）
+function filesOfDir(paths, dir)
+{
+    if (dir === "")
+    {
+        return paths.map((p) => ({ path: p, rel: p }));
+    }
+    const pre = dir + "/";
+    return paths.filter((p) => p.indexOf(pre) === 0)
+        .map((p) => ({ path: p, rel: p.slice(pre.length) }));
+}
+
+function encodePath(p)
+{
+    return p.split("/").map(encodeURIComponent).join("/");
+}
+
+// 取单个文件：优先 raw（无缓存），失败改用 jsdelivr CDN
+async function fetchBlob(repo, branch, path)
+{
+    const enc = encodePath(path);
+    let res = await fetch(ZIP_RAW + repo + "/" + branch + "/" + enc);
+    if (!res.ok) res = await fetch(ZIP_CDN + repo + "@" + branch + "/" + enc);
+    if (!res.ok) throw new Error("下载失败 " + repo + "/" + path + "（HTTP " + res.status + "）");
+    return res.arrayBuffer();
+}
+
+// 固定并发跑完一批任务
+async function runPool(items, worker, limit)
+{
+    let i = 0;
+    const runners = [];
+    for (let k = 0; k < Math.min(limit, items.length); k++)
+    {
+        runners.push((async () =>
+        {
+            while (i < items.length)
+            {
+                const cur = items[i++];
+                await worker(cur);
+            }
+        })());
+    }
+    await Promise.all(runners);
+}
+
+async function downloadZip()
+{
+    if (zipBusy) return;
+    const repos = Array.from(sel);
+    if (repos.length === 0)
+    {
+        toast("先勾选要下载的技能库");
+        return;
+    }
+
+    const btn = document.getElementById("zipBtn");
+    const label = btn.textContent;
+    zipBusy = true;
+    btn.disabled = true;
+    btn.textContent = "准备中…";
+    showZipMsg("");
+
+    const skipped = [];
+    let skillTotal = 0;
+    try
+    {
+        const JSZip = await loadJSZip();
+        const zip = new JSZip();
+        let fileDone = 0;
+        let fileAll = 0;
+
+        // 第一轮：读文件树，算出要打包的清单
+        const plan = [];
+        for (const repo of repos)
+        {
+            btn.textContent = "读取 " + repo + "…";
+            let info;
+            try
+            {
+                info = await loadRepoFiles(repo);
+            }
+            catch (err)
+            {
+                skipped.push(repo + "：" + err.message);
+                continue;
+            }
+
+            const dirs = pickSkillDirs(info.paths);
+            if (dirs.length === 0)
+            {
+                skipped.push(repo + "：仓库里没有 SKILL.md");
+                continue;
+            }
+
+            const jobs = [];
+            dirs.forEach((dir) =>
+            {
+                const leaf = dir === "" ? repo : dir.split("/").pop();
+                const prefix = "wife-legal-" + repo + "-" + leaf;
+                filesOfDir(info.paths, dir).forEach((f) =>
+                {
+                    jobs.push({ repo: repo, branch: info.branch, src: f.path, dst: prefix + "/" + f.rel });
+                });
+            });
+
+            if (jobs.length > ZIP_MAX_FILES)
+            {
+                skipped.push(repo + "：共 " + jobs.length + " 个文件，超过单库上限 " + ZIP_MAX_FILES + "，请改用脚本部署");
+                continue;
+            }
+            skillTotal += dirs.length;
+            fileAll += jobs.length;
+            plan.push.apply(plan, jobs);
+        }
+
+        if (plan.length === 0) throw new Error("没有可打包的技能");
+
+        // 第二轮：并发下载并写入 zip
+        await runPool(plan, async (t) =>
+        {
+            zip.file(t.dst, await fetchBlob(t.repo, t.branch, t.src));
+            fileDone++;
+            btn.textContent = "下载 " + fileDone + "/" + fileAll;
+        }, ZIP_POOL);
+
+        btn.textContent = "打包中…";
+        const blob = await zip.generateAsync(
+            { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } },
+            (meta) => { btn.textContent = "压缩 " + Math.round(meta.percent) + "%"; }
+        );
+
+        const d = new Date();
+        const stamp = d.getFullYear() + ("0" + (d.getMonth() + 1)).slice(-2) + ("0" + d.getDate()).slice(-2);
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "wife-legal-skills-" + stamp + ".zip";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+
+        let msg = "<b>已生成 ZIP</b>：" + skillTotal + " 个技能、" + fileAll + " 个文件、"
+            + (blob.size / 1048576).toFixed(1) + " MB<br>"
+            + "导入方式：CC Switch → Skills → 添加 Skill → 从 ZIP 安装";
+        if (skipped.length)
+        {
+            msg += '<br><span class="warn">跳过 ' + skipped.length + " 个库：</span><br>" + skipped.map(esc).join("<br>");
+        }
+        showZipMsg(msg);
+        toast("ZIP 已下载，可在 CC Switch 里「从 ZIP 安装」");
+    }
+    catch (err)
+    {
+        showZipMsg('<span class="warn">打包失败：</span>' + esc(err.message));
+        toast("打包失败：" + err.message);
+    }
+    finally
+    {
+        btn.disabled = false;
+        btn.textContent = label;
+        zipBusy = false;
+    }
+}
+
+document.getElementById("zipBtn").onclick = downloadZip;
 
 // 状态导入弹层
 const scanModal = document.getElementById("scanModal");
