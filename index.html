@@ -83,6 +83,7 @@ code{font-family:var(--mono)}
 .card .meta .sk{color:var(--ok);font-weight:600}
 .card .meta a{color:var(--brand);text-decoration:none}
 .card .meta a:hover{text-decoration:underline}
+.card .meta a.ccs{background:var(--brand-soft);border-radius:6px;padding:1px 7px;font-weight:600}
 .card details.cg{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;font-size:12px;color:var(--sub)}
 .card details.cg summary{cursor:pointer;color:var(--brand);font-size:12px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none}
 .card details.cg summary::-webkit-details-marker{display:none}
@@ -220,6 +221,7 @@ code{font-family:var(--mono)}
             <input type="text" id="root" placeholder="安装根目录（可选）">
             <span class="hint" id="hint"></span>
             <div class="right">
+                <button class="export" id="ccsBtn" title="用官方深链接把勾选的每个库注册为 CC Switch 的 Skill 仓库（一库一条记录，CC Switch 会自动同步库内技能）">导入 CC Switch 仓库</button>
                 <button class="export" id="zipBtn" title="把勾选的每个技能库各打成 ZIP 里的一个库目录，可直接在 CC Switch 的「从 ZIP 安装」里导入">下载 ZIP</button>
                 <button class="export" id="exportBtn">导出配置</button>
                 <button class="copy" id="copyBtn">复制命令</button>
@@ -227,6 +229,7 @@ code{font-family:var(--mono)}
             </div>
         </div>
         <pre id="cmdOut">（尚未选择任何技能仓）</pre>
+        <div class="zipmsg" id="ccsMsg"></div>
         <div class="zipmsg" id="zipMsg"></div>
     </div>
 </div>
@@ -605,6 +608,7 @@ function render()
         let meta = '<div class="meta">';
         meta += skills ? '<span class="sk">' + skills + " 个技能</span>" : "<span>技能数未知</span>";
         if (upstream) meta += '<a href="https://github.com/' + esc(upstream) + '" target="_blank" rel="noopener">上游 ↗</a>';
+        meta += '<a class="ccs" href="' + esc(ccsLink(repo)) + '" title="把本库注册为 CC Switch 的 Skill 仓库（一库一条记录，库内技能自动同步）">导入 CC Switch ↗</a>';
         meta += "</div>";
 
         c.innerHTML = head + '<div class="note">' + esc(note) + "</div>" + meta;
@@ -772,6 +776,88 @@ const ZIP_API = "https://api.github.com/repos/" + ZIP_ORG + "/";
 const ZIP_MAX_FILES = 1500;   // 单个仓库的文件数上限，超出的建议改用脚本部署
 const ZIP_POOL = 8;           // 并发下载数
 let zipBusy = false;
+
+// ===== 导入 CC Switch 仓库：用官方深链接把每个库注册成一个 Skill 仓库 =====
+// resource=skill 的深链接添加的是「Skill 仓库」而不是直接安装技能；注册后 CC Switch
+// 按仓库里的 SKILL.md 列出库内全部技能，所以一个库就是一条记录、内含 N 个技能
+const CCS_SCHEME = "ccswitch://v1/import?resource=skill&repo=";
+const CCS_GAP = 1500;   // 连续唤起 CC Switch 的间隔，太快会被浏览器/系统丢掉
+let ccsBusy = false;
+let ccsTimer = null;
+
+function ccsLink(lib)
+{
+    return CCS_SCHEME + encodeURIComponent(ZIP_ORG + "/" + lib) + "&branch=main";
+}
+
+function showCcsMsg(html)
+{
+    const el = document.getElementById("ccsMsg");
+    el.innerHTML = html;
+    el.classList.toggle("show", !!html);
+}
+
+function openCcs(lib)
+{
+    const a = document.createElement("a");
+    a.href = ccsLink(lib);
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+function stopCcs(done)
+{
+    ccsBusy = false;
+    if (ccsTimer)
+    {
+        clearTimeout(ccsTimer);
+        ccsTimer = null;
+    }
+    document.getElementById("ccsBtn").textContent = "导入 CC Switch 仓库";
+    if (!done) showCcsMsg("");
+}
+
+// 依次唤起 CC Switch：每个库都会弹一次确认框，确认后回到本页等下一个
+function importToCcs()
+{
+    if (ccsBusy)
+    {
+        stopCcs(false);
+        toast("已停止导入");
+        return;
+    }
+
+    const libs = Array.from(sel);
+    if (libs.length === 0)
+    {
+        toast("先勾选要导入的技能库");
+        return;
+    }
+
+    let i = 0;
+    ccsBusy = true;
+    document.getElementById("ccsBtn").textContent = "停止导入";
+
+    const step = () =>
+    {
+        if (!ccsBusy) return;
+        if (i >= libs.length)
+        {
+            stopCcs(true);
+            showCcsMsg("<b>已发起 " + libs.length + " 个库的导入</b><br>全部确认后，到 CC Switch 的「Skills」页选择要安装的技能。");
+            toast("已发起 " + libs.length + " 个库的导入");
+            return;
+        }
+        const lib = libs[i++];
+        openCcs(lib);
+        showCcsMsg("正在导入 <b>" + i + " / " + libs.length + "</b>：" + esc(lib)
+            + "<br>在 CC Switch 弹窗里点「确认」，确认完回到本页等下一个（每个库都要确认一次）。");
+        ccsTimer = setTimeout(step, CCS_GAP);
+    };
+    step();
+}
 
 // 按需加载 JSZip，避免影响首屏
 function loadJSZip()
@@ -1070,6 +1156,7 @@ async function downloadZip()
 }
 
 document.getElementById("zipBtn").onclick = downloadZip;
+document.getElementById("ccsBtn").onclick = importToCcs;
 
 // 状态导入弹层
 const scanModal = document.getElementById("scanModal");
