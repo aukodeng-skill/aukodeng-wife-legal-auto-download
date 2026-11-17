@@ -1,191 +1,481 @@
-﻿# wife-legal 法律技能仓一键部署/更新/切换脚本
-# 按 GitHub topic wife-legal 自动发现组织下的法律技能仓，仓名清单不写死
-# 用法：
-#   .\deploy-wife-legal-skills.ps1 -Action list
-#   .\deploy-wife-legal-skills.ps1 -Action install
-#   .\deploy-wife-legal-skills.ps1 -Action update
-#   .\deploy-wife-legal-skills.ps1 -Action enable -Project D:\Git\proj -Repo Legal-Skills-Chinese
-#   .\deploy-wife-legal-skills.ps1 -Action disable -Project D:\Git\proj
+﻿<#
+.SYNOPSIS
+    法律技能一键部署（按 GitHub topic 自动发现，支持 Windows / macOS / Linux）
+
+.DESCRIPTION
+    - 技能仓清单来自组织仓库的 topic（默认 wife-legal），不写死仓名；
+    - catalog.tsv 提供业务分类，用于选择安装与平铺启用；
+    - 支持交互式选择：可按分类、按仓库、全部或排除大型库；
+    - Windows 用 PowerShell 原生运行；macOS / Linux 可用 deploy.sh 自动转调同名 bash 脚本。
+
+.EXAMPLE
+    .\scripts\deploy-wife-legal-skills.ps1 -Action list
+    .\scripts\deploy-wife-legal-skills.ps1 -Action install
+    .\scripts\deploy-wife-legal-skills.ps1 -Action install -Category 合同与商事
+    .\scripts\deploy-wife-legal-skills.ps1 -Action enable -Repo Legal-Skills-Chinese -Project D:\Git\my-project
+#>
 param(
-    # 操作类型：list（列出标签下仓库）、install（克隆）、update（拉取）、enable/disable（在项目内启用/停用）
-    [ValidateSet('list','install','update','enable','disable')]
+    [ValidateSet('list','status','install','update','enable','disable')]
     [string]$Action = 'install',
-    # 按 topic 检索的组织
+
     [string]$Org = 'aukodeng-skill',
-    # 检索用的 topic
     [string]$Topic = 'wife-legal',
-    # 技能库根目录（每个仓一个子目录）
-    [string]$Root = 'D:\Git\ai-skills\wife-legal',
-    # 启用/停用的目标项目根（默认当前目录）
+
+    # 技能库根目录；不传时按平台自动选择
+    [string]$Root = '',
+
+    # 目标项目根目录（enable / disable 生效位置：<Project>/.trae/skills）
     [string]$Project = (Get-Location).Path,
-    # 只处理指定仓（留空为全部）
+
     [string[]]$Repo = @(),
-    # 允许启用 awesome-legal-skills 这类超大合集（默认跳过，避免技能列表膨胀）
-    [switch]$IncludeLarge
+    [string[]]$Category = @(),
+    [switch]$All,
+    [switch]$IncludeLarge,
+
+    # 不走交互菜单（参数已足够时自动生效）
+    [switch]$NonInteractive,
+
+    # 允许覆盖已存在的目标技能目录（enable 默认覆盖，保留开关便于脚本调用）
+    [switch]$Force,
+
+    # 显示帮助（deploy.sh 转调 -h/--help 时使用）
+    [switch]$Help
 )
 
-# 体积过大的合集仓，默认不参与 enable
-$largeRepos = @('awesome-legal-skills')
+$ErrorActionPreference = 'Stop'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $scriptDir
+$catalogPath = Join-Path $repoRoot 'catalog.tsv'
 
-# API 不可达时的兜底清单（与 topic 检索结果保持一致）
-$fallbackRepos = @('Legal-Skills-Chinese','legal-skills','lawyerDU','claude-for-legal','awesome-legal-skills')
-
-# 发现：优先按 topic 检索组织下仓库，失败时回落到内置清单
-function Get-TargetRepos
+if ($Help)
 {
-    $headers = @{
-        'User-Agent' = 'aukodeng-wife-legal-auto-download'
-        'Accept'     = 'application/vnd.github.mercy-preview+json'
+    @'
+用法：deploy-wife-legal-skills.ps1 [参数]
+
+  -Action <list|status|install|update|enable|disable>  默认 install
+  -Repo <名称>        指定仓库，可重复或逗号分隔
+  -Category <分类>    指定业务分类，可重复或逗号分隔
+  -All                全部仓库（仍不含大型库）
+  -IncludeLarge       放开大型库（安装与启用都生效）
+  -Root <目录>        技能库根目录，默认 D:\Git\ai-skills\wife-legal
+  -Project <目录>     目标项目根目录（enable/disable 作用位置），默认当前目录
+  -Org <组织>         默认 aukodeng-skill
+  -Topic <标签>       默认 wife-legal
+  -NonInteractive     不做交互菜单（使用默认全选或显式参数）
+  -Help               显示帮助
+'@ | Write-Host
+    exit 0
+}
+
+function Test-WindowsPlatform
+{
+    return ([System.Environment]::OSVersion.Platform -eq 'Win32NT')
+}
+
+function Get-DefaultRoot
+{
+    if (Test-WindowsPlatform)
+    {
+        if (Test-Path 'D:\Git')
+        {
+            return 'D:\Git\ai-skills\wife-legal'
+        }
+        return [IO.Path]::Combine($env:USERPROFILE, 'Git', 'ai-skills', 'wife-legal')
     }
-    $result = @()
+    return [IO.Path]::Combine($HOME, 'Git', 'ai-skills', 'wife-legal')
+}
+
+function Get-Catalog
+{
+    if (-not (Test-Path $catalogPath))
+    {
+        throw "未找到分类清单：$catalogPath"
+    }
+    # catalog.tsv 为 UTF-8（无 BOM），显式指定编码避免中文乱码
+    return Import-Csv -Path $catalogPath -Delimiter "`t" -Encoding UTF8
+}
+
+# 按 topic 从组织仓库发现技能仓；网络不可用时回落到 catalog.tsv
+function Get-DiscoveredRepos
+{
+    $headers = @{ Accept = 'application/vnd.github.mercy-preview+json'; 'User-Agent' = 'wife-legal-deploy' }
+    $found = @()
     try
     {
         $page = 1
-        while ($true)
+        while ($page -le 10)
         {
-            $uri = "https://api.github.com/orgs/$Org/repos?per_page=100&page=$page"
-            $batch = Invoke-RestMethod -Uri $uri -Headers $headers -TimeoutSec 20 -ErrorAction Stop
-            if (-not $batch) { break }
-            $result += $batch
-            if ($batch.Count -lt 100) { break }
-            $page++
-        }
-        $matched = $result | Where-Object { $_.topics -contains $Topic }
-        if (-not $matched)
-        {
-            Write-Warning "组织 $Org 下没有找到 topic=$Topic 的仓库，改用内置清单"
-            $matched = $fallbackRepos | ForEach-Object {
-                [pscustomobject]@{ name = $_; clone_url = "https://github.com/$Org/$_.git" }
+            $url = "https://api.github.com/orgs/$Org/repos?per_page=100&page=$page"
+            $items = Invoke-RestMethod -Uri $url -Headers $headers -TimeoutSec 20
+            if (-not $items -or $items.Count -eq 0)
+            {
+                break
             }
+            foreach ($item in $items)
+            {
+                if ($item.topics -contains $Topic)
+                {
+                    $found += $item.name
+                }
+            }
+            if ($items.Count -lt 100)
+            {
+                break
+            }
+            $page++
         }
     }
     catch
     {
-        Write-Warning "GitHub API 调用失败（$($_.Exception.Message)），改用内置清单"
-        $matched = $fallbackRepos | ForEach-Object {
-            [pscustomobject]@{ name = $_; clone_url = "https://github.com/$Org/$_.git" }
-        }
+        Write-Warning "按 topic 发现仓库失败（$($_.Exception.Message)），改用 catalog.tsv 清单"
+        return $null
     }
-    if ($Repo.Count -gt 0)
-    {
-        $matched = $matched | Where-Object { $Repo -contains $_.name }
-    }
-    return $matched | ForEach-Object {
-        [pscustomobject]@{ Name = $_.name; Url = $_.clone_url }
-    }
+    return $found
 }
 
-$repos = @(Get-TargetRepos)
-if ($repos.Count -eq 0)
+function Select-Repos
 {
-    Write-Host "没有匹配的仓库（Org=$Org，Topic=$Topic，Repo=$($Repo -join ',')）"
-    return
-}
+    param($Catalog)
 
-# list：列出标签下仓库及本地是否已部署
-if ($Action -eq 'list')
-{
-    foreach ($r in $repos)
-    {
-        $dest = Join-Path $Root $r.Name
-        $state = if (Test-Path (Join-Path $dest '.git')) { '已部署' } else { '未部署' }
-        Write-Host ("[{0}] {1}  {2}" -f $state, $r.Name, $r.Url)
-    }
-    return
-}
+    $names = @($Catalog | ForEach-Object { $_.repo })
 
-# install：浅克隆到 Root\<仓库名>
-if ($Action -eq 'install')
-{
-    New-Item -ItemType Directory -Force -Path $Root | Out-Null
-    foreach ($r in $repos)
+    # 显式指定了仓库或分类，或要求全部：不做交互
+    if ($Repo.Count -gt 0 -or $Category.Count -gt 0 -or $All -or $NonInteractive)
     {
-        $dest = Join-Path $Root $r.Name
-        if (Test-Path $dest)
+        $selected = @()
+        if ($All)
         {
-            Write-Host "[跳过] $dest 已存在（更新请用 -Action update）"
-            continue
+            $selected = $Catalog
         }
-        # --depth 1 只取最新快照，技能包不需要完整历史
-        git clone --depth 1 $r.Url $dest
-    }
-    return
-}
-
-# update：对已部署仓库执行 git pull
-if ($Action -eq 'update')
-{
-    foreach ($r in $repos)
-    {
-        $dest = Join-Path $Root $r.Name
-        if (Test-Path (Join-Path $dest '.git'))
+        elseif ($Repo.Count -gt 0)
         {
-            Write-Host "[更新] $dest"
-            git -C $dest pull --ff-only
+            foreach ($r in $Repo)
+            {
+                $hit = $Catalog | Where-Object { $_.repo -eq $r }
+                if (-not $hit)
+                {
+                    Write-Warning "catalog.tsv 中没有仓库：$r"
+                    continue
+                }
+                $selected += $hit
+            }
+        }
+        elseif ($Category.Count -gt 0)
+        {
+            foreach ($c in $Category)
+            {
+                $hit = @($Catalog | Where-Object { $_.category -eq $c })
+                if ($hit.Count -eq 0)
+                {
+                    Write-Warning "没有该分类：$c"
+                    continue
+                }
+                $selected += $hit
+            }
         }
         else
         {
-            Write-Host "[缺失] $dest 不存在，请先 -Action install"
+            $selected = @($Catalog | Where-Object { $_.large -ne '1' })
+        }
+        return @($selected | Sort-Object repo -Unique)
+    }
+
+    # 交互菜单（分类顺序与 catalog.tsv 一致，保证 Windows/macOS 编号相同）
+    $catOrder = @()
+    foreach ($row in $Catalog)
+    {
+        if ($catOrder -notcontains $row.category)
+        {
+            $catOrder += $row.category
         }
     }
-    return
-}
-
-# enable：把每个仓里的技能目录平铺到项目 .trae\skills\wife-legal-<仓>-<技能>
-# Trae 只识别 .trae\skills\<name>\SKILL.md 这一层，所以必须平铺，不能保留仓库原有嵌套
-if ($Action -eq 'enable')
-{
-    $skillRoot = Join-Path $Project '.trae\skills'
-    New-Item -ItemType Directory -Force -Path $skillRoot | Out-Null
-    foreach ($r in $repos)
+    Write-Host ''
+    Write-Host '可用技能分类：' -ForegroundColor Cyan
+    $i = 1
+    $indexMap = @{}
+    foreach ($cat in $catOrder)
     {
-        if ($largeRepos -contains $r.Name -and -not $IncludeLarge)
+        $catCount = @($Catalog | Where-Object { $_.category -eq $cat }).Count
+        Write-Host ("  [{0}] {1}（{2} 个仓）" -f $i, $cat, $catCount)
+        $indexMap[$i] = $cat
+        $i++
+    }
+    Write-Host ("  [{0}] 全部（不含大型库）" -f $i)
+    $allIndex = $i
+    $i++
+    if ($IncludeLarge)
+    {
+        Write-Host ("  [{0}] 全部（含大型库）" -f $i)
+        $allLargeIndex = $i
+    }
+
+    Write-Host ''
+    Write-Host '输入编号 / 分类名 / 仓库名（空格或逗号分隔），直接回车=全部（不含大型库）：' -ForegroundColor Yellow
+    $answer = Read-Host '选择'
+
+    if ([string]::IsNullOrWhiteSpace($answer))
+    {
+        return @($Catalog | Where-Object { $_.large -ne '1' })
+    }
+
+    $tokens = @($answer -split '[,，\s]+' | Where-Object { $_ -ne '' })
+    $selected = @()
+    foreach ($t in $tokens)
+    {
+        $num = 0
+        if ([int]::TryParse($t, [ref]$num))
         {
-            Write-Host "[跳过] $($r.Name) 技能数量过多，需要时加 -IncludeLarge 或 -Repo $($r.Name)"
+            if ($num -eq $allIndex)
+            {
+                $selected += @($Catalog | Where-Object { $_.large -ne '1' })
+            }
+            elseif ($IncludeLarge -and $num -eq $allLargeIndex)
+            {
+                $selected += $Catalog
+            }
+            elseif ($indexMap.ContainsKey($num))
+            {
+                $cat = $indexMap[$num]
+                $selected += @($Catalog | Where-Object { $_.category -eq $cat })
+            }
+            else
+            {
+                Write-Warning "无效编号：$t"
+            }
             continue
         }
-        $src = Join-Path $Root $r.Name
+        $byCat = @($Catalog | Where-Object { $_.category -eq $t })
+        if ($byCat.Count -gt 0)
+        {
+            $selected += $byCat
+            continue
+        }
+        $byRepo = @($Catalog | Where-Object { $_.repo -eq $t })
+        if ($byRepo.Count -gt 0)
+        {
+            $selected += $byRepo
+            continue
+        }
+        Write-Warning "未匹配的分类或仓库：$t"
+    }
+    return @($selected | Sort-Object repo -Unique)
+}
+
+function Show-Catalog
+{
+    param($Catalog)
+    $lastCat = ''
+    foreach ($row in $Catalog)
+    {
+        if ($row.category -ne $lastCat)
+        {
+            Write-Host ''
+            Write-Host ("[{0}]" -f $row.category) -ForegroundColor Cyan
+            $lastCat = $row.category
+        }
+        $flag = ''
+        if ($row.large -eq '1')
+        {
+            $flag = '（大型库）'
+        }
+        Write-Host ("  - {0}{1} | {2} 个技能 | {3}" -f $row.repo, $flag, $row.skills, $row.note)
+    }
+}
+
+function Invoke-Install
+{
+    param($Targets)
+
+    if (-not (Test-Path $Root))
+    {
+        New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    }
+    foreach ($row in $Targets)
+    {
+        $dest = [IO.Path]::Combine($Root, $row.repo)
+        if (Test-Path $dest)
+        {
+            Write-Host ("跳过（已存在）：{0}" -f $row.repo) -ForegroundColor DarkGray
+            continue
+        }
+        Write-Host ("克隆：{0}" -f $row.repo) -ForegroundColor Green
+        git clone --depth 1 "https://github.com/$Org/$($row.repo).git" $dest
+        if ($LASTEXITCODE -ne 0)
+        {
+            Write-Warning ("克隆失败：{0}" -f $row.repo)
+        }
+    }
+}
+
+function Invoke-Update
+{
+    param($Targets)
+
+    foreach ($row in $Targets)
+    {
+        $dest = [IO.Path]::Combine($Root, $row.repo)
+        if (-not (Test-Path $dest))
+        {
+            Write-Host ("尚未安装，先克隆：{0}" -f $row.repo) -ForegroundColor Yellow
+            git clone --depth 1 "https://github.com/$Org/$($row.repo).git" $dest
+            continue
+        }
+        Write-Host ("更新：{0}" -f $row.repo) -ForegroundColor Green
+        git -C $dest pull --ff-only
+    }
+}
+
+function Invoke-Enable
+{
+    param($Targets)
+
+    $skillsRoot = [IO.Path]::Combine($Project, '.trae', 'skills')
+    New-Item -ItemType Directory -Force -Path $skillsRoot | Out-Null
+
+    foreach ($row in $Targets)
+    {
+        $src = [IO.Path]::Combine($Root, $row.repo)
         if (-not (Test-Path $src))
         {
-            Write-Host "[缺失] $src 不存在，请先 -Action install"
+            Write-Warning ("未安装，跳过启用：{0}（先执行 -Action install）" -f $row.repo)
             continue
         }
-        # 每个 SKILL.md 所在目录就是一个技能
-        $skillFiles = Get-ChildItem -Path $src -Recurse -Filter 'SKILL.md' -File -ErrorAction SilentlyContinue
+        if ($row.large -eq '1' -and -not $IncludeLarge)
+        {
+            Write-Warning ("大型库默认不启用：{0}（追加 -IncludeLarge 强制启用）" -f $row.repo)
+            continue
+        }
+
+        $skillFiles = @(Get-ChildItem -Path $src -Recurse -Filter 'SKILL.md' -File -ErrorAction SilentlyContinue)
+        if ($skillFiles.Count -eq 0)
+        {
+            Write-Warning ("未找到 SKILL.md：{0}" -f $row.repo)
+            continue
+        }
+
+        $used = @{}
+        $count = 0
         foreach ($f in $skillFiles)
         {
-            $leaf = Split-Path $f.DirectoryName -Leaf
-            $name = if ($leaf -eq $r.Name) { "wife-legal-$($r.Name)" } else { "wife-legal-$($r.Name)-$leaf" }
-            $target = Join-Path $skillRoot $name
+            $skillDir = Split-Path -Parent $f.FullName
+            $leaf = Split-Path -Leaf $skillDir
+            $prefix = "wife-legal-$($row.repo)-$leaf"
+            if ($used.ContainsKey($prefix))
+            {
+                $used[$prefix] = $used[$prefix] + 1
+                $prefix = "$prefix-$($used[$prefix])"
+            }
+            else
+            {
+                $used[$prefix] = 1
+            }
+            $target = [IO.Path]::Combine($skillsRoot, $prefix)
             if (Test-Path $target)
             {
-                Remove-Item $target -Recurse -Force
+                Remove-Item -Path $target -Recurse -Force
             }
-            Copy-Item $f.DirectoryName $target -Recurse -Force
+            Copy-Item -Path $skillDir -Destination $target -Recurse -Force
+            $count++
         }
-        Write-Host "[启用] $($r.Name)：$($skillFiles.Count) 个技能 -> $skillRoot"
+        Write-Host ("启用：{0} -> {1} 个技能" -f $row.repo, $count) -ForegroundColor Green
     }
-    return
 }
 
-# disable：移除本脚本铺进项目的 wife-legal-* 技能目录
-if ($Action -eq 'disable')
+function Invoke-Disable
 {
-    $skillRoot = Join-Path $Project '.trae\skills'
-    if (-not (Test-Path $skillRoot))
+    param($Targets)
+
+    $skillsRoot = [IO.Path]::Combine($Project, '.trae', 'skills')
+    if (-not (Test-Path $skillsRoot))
     {
-        Write-Host "[跳过] $skillRoot 不存在"
+        Write-Host '目标项目没有 .trae/skills，无需停用'
         return
     }
-    $targets = Get-ChildItem $skillRoot -Directory -Filter 'wife-legal-*' -ErrorAction SilentlyContinue
-    if (-not $targets)
+    foreach ($row in $Targets)
     {
-        Write-Host "[跳过] 没有 wife-legal-* 技能目录"
-        return
+        $pattern = "wife-legal-$($row.repo)-*"
+        $dirs = @(Get-ChildItem -Path $skillsRoot -Directory -Filter $pattern -ErrorAction SilentlyContinue)
+        foreach ($d in $dirs)
+        {
+            Remove-Item -Path $d.FullName -Recurse -Force
+        }
+        Write-Host ("停用：{0}（移除 {1} 个目录）" -f $row.repo, $dirs.Count) -ForegroundColor Green
     }
-    foreach ($t in $targets)
+}
+
+function Show-Status
+{
+    param($Catalog)
+
+    foreach ($row in $Catalog)
     {
-        Remove-Item $t.FullName -Recurse -Force
-        Write-Host "[停用] 已移除 $($t.FullName)"
+        $dest = [IO.Path]::Combine($Root, $row.repo)
+        $installed = Test-Path $dest
+        $enabled = 0
+        $skillsRoot = [IO.Path]::Combine($Project, '.trae', 'skills')
+        if (Test-Path $skillsRoot)
+        {
+            $enabled = @(Get-ChildItem -Path $skillsRoot -Directory -Filter "wife-legal-$($row.repo)-*" -ErrorAction SilentlyContinue).Count
+        }
+        $state = if ($installed) { '已安装' } else { '未安装' }
+        Write-Host ("{0,-48} {1,-6} 已启用 {2}" -f $row.repo, $state, $enabled)
+    }
+}
+
+# ---------- 主流程 ----------
+$catalog = Get-Catalog
+
+# 用 topic 发现结果校验 catalog（发现多出的仓时提示补录）
+$discovered = Get-DiscoveredRepos
+if ($discovered -and $discovered.Count -gt 0)
+{
+    $known = @($catalog | ForEach-Object { $_.repo })
+    $missing = @($discovered | Where-Object { $known -notcontains $_ })
+    if ($missing.Count -gt 0)
+    {
+        Write-Warning ("以下仓库带 topic {0} 但未登记到 catalog.tsv：{1}" -f $Topic, ($missing -join ', '))
+    }
+}
+
+if (-not $Root)
+{
+    $Root = Get-DefaultRoot
+}
+
+switch ($Action)
+{
+    'list'
+    {
+        Show-Catalog -Catalog $catalog
+        Write-Host ''
+        Write-Host ("技能库根目录：{0}" -f $Root)
+        break
+    }
+    'status'
+    {
+        Show-Status -Catalog $catalog
+        break
+    }
+    default
+    {
+        $targets = Select-Repos -Catalog $catalog
+        if (-not $targets -or $targets.Count -eq 0)
+        {
+            Write-Warning '没有选中任何仓库'
+            break
+        }
+        Write-Host ''
+        Write-Host ("技能库根目录：{0}" -f $Root)
+        Write-Host ("目标项目：{0}" -f $Project)
+        Write-Host ''
+
+        switch ($Action)
+        {
+            'install' { Invoke-Install -Targets $targets }
+            'update'  { Invoke-Update  -Targets $targets }
+            'enable'  { Invoke-Enable  -Targets $targets }
+            'disable' { Invoke-Disable -Targets $targets }
+        }
+        break
     }
 }

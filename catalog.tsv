@@ -1,0 +1,35 @@
+repo	category	upstream	large	skills	note
+Legal-Skills-Chinese	综合技能库	THUYRan/Legal-Skills-Chinese	0	76	中文法律技能合集，覆盖合同、诉讼、合规等通用场景
+legal-skills	综合技能库	pa1nrui1/legal-skills	0	2	中文法律工作流（尽调、文书），含检索脚本
+lawyerDU	综合技能库	law086com/lawyerDU	0	-	律师实务技能与提示词合集
+claude-for-legal	综合技能库	anthropics/claude-for-legal	0	-	Anthropic 官方法律技能示例（英文，美国法）
+legal-skills-1	综合技能库	cat-xierluo/legal-skills	0	72	中文法律人技能集合，更新活跃
+legal-skills-2	综合技能库	gfodor/legal-skills	0	3	英文法律技能（合同、检索），GPL-3.0
+lq-skills	综合技能库	LegalQuants/lq-skills	0	52	面向律师与法律工程师的技能集合
+mini-claude-for-legal	综合技能库	sboghossian/mini-claude-for-legal	1	982	大型英文技能库（982 个 SKILL.md），默认不启用
+legal-skills-open	综合技能库	ThomasMoreAI/legal-skills-open	1	20295	超大法律技能库（2 万+ SKILL.md），默认不启用
+awesome-legal-skills	综合技能库	lawve-ai/awesome-legal-skills	1	281	法律技能索引与合集，默认不启用
+ai-legal-claude	合同与商事	zubair-trabzada/ai-legal-claude	0	14	合同审查、NDA、合规风险，1.8k star
+claude-legal-skill	合同与商事	evolsb/claude-legal-skill	0	1	基于 CUAD 数据集的合同条款审查
+contract-copilot.skill	合同与商事	cat-xierluo/contract-copilot.skill	0	1	中文合同起草与审查副驾
+new-litigation-visualization	诉讼与争议解决	MiaoQichuan/new-litigation-visualization	0	8	诉讼可视化与庭审表达（8 个模块）
+cn-litigation-toolkit	诉讼与争议解决	Youchu-lawhub/cn-litigation-toolkit	0	23	中国诉讼工具箱（立案、证据、庭审）
+china-lawyer-analyst	诉讼与争议解决	CSlawyer1985/china-lawyer-analyst	0	1	中国律师案件分析与策略
+uae-offplan-dispute-skill	诉讼与争议解决	qgardens2buyer/uae-offplan-dispute-skill	0	1	UAE 期房买卖争议与仲裁要点
+legal-research-skill	法律检索与类案	Golden2002/legal-research-skill	0	2	法律检索流程与引证规范
+cn-law-hub	法律检索与类案	ZongziForu/cn-law-hub	0	1	中国法条检索与法源定位
+china-law-case-analysis-skills	法律检索与类案	wesky820/china-law-case-analysis-skills	0	1	类案检索与裁判要旨分析
+dingduff-public	法律检索与类案	DingDuff/dingduff-public	0	5	法律检索技能与 Claude 插件
+cn-labor-law-skills	劳动与用工	peter111999/cn-labor-law-skills	0	17	中国劳动法：入职、解除、竞业、劳动仲裁
+worker-rights-cn	劳动与用工	90le/worker-rights-cn	0	11	劳动者维权：加班费、工伤、仲裁流程
+family-lawyer-skills	婚姻家事	yiyanli123/family-lawyer-skills	0	2	婚姻家事：离婚、财产分割、抚养权
+Claude-Patent-Creator	知识产权	RobThePCGuy/Claude-Patent-Creator	0	17	美国专利撰写与 USPTO 流程
+cn-patent-drafter	知识产权	handsomeZR-netizen/cn-patent-drafter	0	1	中国专利撰写
+patent-skills	知识产权	Obviously-Not/patent-skills	0	4	专利检索、撰写与审查意见答复
+Claude-Skills-Governance-Risk-and-Compliance	合规与企业法务	Sushegaad/Claude-Skills-Governance-Risk-and-Compliance	0	36	GRC：治理、风险、合规（1k star）
+SOE-Legal-Checker	合规与企业法务	HsuanZhao/SOE-Legal-Checker	0	1	国企合规与法律审核
+qulv-china-legal-counsel-skill	合规与企业法务	Daknniel-0881/qulv-china-legal-counsel-skill	0	1	企业法律顾问日常（合同、用印、纠纷）
+legal-document-assistant	法律文书与翻译	fayayy888/legal-document-assistant	0	7	法律文书起草与校对
+Chinese-English-Legal-Translation-Skill	法律文书与翻译	StefanCHEN2026/Chinese-English-Legal-Translation-Skill	0	1	中英法律翻译术语与句式
+AI-Skills-German-Law	域外法	borghei/AI-Skills-German-Law	0	319	德国法技能库（319 个 SKILL.md）
+commercial-legal-pl	域外法	apiotrowski-afk/commercial-legal-pl	0	10	波兰商事法（英文/波兰文）
