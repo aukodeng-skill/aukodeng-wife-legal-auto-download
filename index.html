@@ -220,7 +220,7 @@ code{font-family:var(--mono)}
             <input type="text" id="root" placeholder="安装根目录（可选）">
             <span class="hint" id="hint"></span>
             <div class="right">
-                <button class="export" id="zipBtn" title="把勾选的技能库打包成 ZIP，可直接在 CC Switch 的「从 ZIP 安装」里导入">下载 ZIP</button>
+                <button class="export" id="zipBtn" title="把勾选的每个技能库各打成 ZIP 里的一个库目录，可直接在 CC Switch 的「从 ZIP 安装」里导入">下载 ZIP</button>
                 <button class="export" id="exportBtn">导出配置</button>
                 <button class="copy" id="copyBtn">复制命令</button>
                 <button class="x" id="cmdClose" title="关闭（Esc）" aria-label="关闭">×</button>
@@ -761,8 +761,9 @@ document.getElementById("exportBtn").onclick = () => {
 };
 
 // ===== 下载 ZIP：把勾选的技能库打包成可直接导入 CC Switch 的压缩包 =====
-// 目录名沿用部署脚本的规则 wife-legal-<仓库名>-<技能目录名>；CC Switch 的
-// 「从 ZIP 安装」按目录里的 SKILL.md 识别技能，所以每个技能目录都必须带上它。
+// 每个仓库打成一个技能库目录 wife-legal-<仓库名>：CC Switch 的「从 ZIP 安装」按目录里的
+// SKILL.md 识别技能，且遇到含 SKILL.md 的目录就不再往里扫，所以库目录根部必须有 SKILL.md
+//（仓库自己没有就补一个），库内的子技能原样留在子目录里，由根部这份索引说明。
 const ZIP_ORG = "aukodeng-skill";
 const ZIP_RAW = "https://raw.githubusercontent.com/" + ZIP_ORG + "/";
 const ZIP_CDN = "https://cdn.jsdelivr.net/gh/" + ZIP_ORG + "/";
@@ -869,16 +870,46 @@ function pickSkillDirs(paths)
     });
 }
 
-// 技能目录下的全部文件（rel 为 zip 内的相对路径）
-function filesOfDir(paths, dir)
+// 生成库入口 SKILL.md：CC Switch 只把库目录当成一条技能记录，库内子技能靠这份索引定位
+function libSkillMd(repo, dirs, hasUpstream)
 {
-    if (dir === "")
+    const row = DATA.find((r) => r[0] === repo) || [];
+    const note = row[5] || "";
+    const upstream = row[2] || "";
+    const desc = (note ? note + "；" : "")
+        + "本库收录 " + dirs.length + " 个法律技能，按用户任务从库内子目录取对应 SKILL.md 使用。";
+    const head = [
+        "---",
+        "name: " + repo,
+        "description: " + desc,
+        "---",
+        "",
+        "# " + repo,
+        "",
+        note,
+        "",
+        "来源仓库：" + upstream + "；库内共 " + dirs.length + " 个技能。",
+        ""
+    ];
+    if (hasUpstream)
     {
-        return paths.map((p) => ({ path: p, rel: p }));
+        head.push("原仓库的入口说明保留在同目录的 `UPSTREAM.md`，其中的相对路径均相对本库根目录。", "");
     }
-    const pre = dir + "/";
-    return paths.filter((p) => p.indexOf(pre) === 0)
-        .map((p) => ({ path: p, rel: p.slice(pre.length) }));
+    head.push("## 技能索引", "");
+    // 根目录本身也含 SKILL.md 时 pickSkillDirs 会返回空字符串，它不是子目录，不进索引
+    const subs = dirs.filter((d) => d !== "");
+    const items = subs.length
+        ? subs.map((d) => "- `" + d + "/` —— " + d.split("/").pop())
+        : ["- 本库根目录的 `SKILL.md` 即唯一技能，直接按上面的说明使用。"];
+    const tail = [
+        "",
+        "## 使用方式",
+        "",
+        "1. 先判断用户要做的事属于哪个技能；",
+        "2. 从上表找到对应子目录，读取该目录下的 `SKILL.md`；",
+        "3. 按该 SKILL.md 的说明执行，需要模板或脚本时读取同目录内的文件。"
+    ];
+    return head.concat(items, tail).join("\n");
 }
 
 function encodePath(p)
@@ -934,6 +965,7 @@ async function downloadZip()
 
     const skipped = [];
     let skillTotal = 0;
+    let libTotal = 0;
     try
     {
         const JSZip = await loadJSZip();
@@ -964,23 +996,27 @@ async function downloadZip()
                 continue;
             }
 
-            const jobs = [];
-            dirs.forEach((dir) =>
-            {
-                const leaf = dir === "" ? repo : dir.split("/").pop();
-                const prefix = "wife-legal-" + repo + "-" + leaf;
-                filesOfDir(info.paths, dir).forEach((f) =>
-                {
-                    jobs.push({ repo: repo, branch: info.branch, src: f.path, dst: prefix + "/" + f.rel });
-                });
-            });
+            const lib = "wife-legal-" + repo;
+            const hasUpstream = info.paths.some((p) => /^SKILL\.md$/i.test(p));
+            // 仓库根自带 SKILL.md 时改名为 UPSTREAM.md 保留原文，库根统一用生成的入口，
+            // 这样 CC Switch 里显示的库名始终是页面上的库名，而不是上游仓库的自定义 name
+            const jobs = info.paths.map((p) => ({
+                repo: repo,
+                branch: info.branch,
+                src: p,
+                dst: lib + "/" + (hasUpstream && /^SKILL\.md$/i.test(p) ? "UPSTREAM.md" : p)
+            }));
 
             if (jobs.length > ZIP_MAX_FILES)
             {
                 skipped.push(repo + "：共 " + jobs.length + " 个文件，超过单库上限 " + ZIP_MAX_FILES + "，请改用脚本部署");
                 continue;
             }
+
+            jobs.push({ text: libSkillMd(repo, dirs, hasUpstream), dst: lib + "/SKILL.md" });
+
             skillTotal += dirs.length;
+            libTotal++;
             fileAll += jobs.length;
             plan.push.apply(plan, jobs);
         }
@@ -990,7 +1026,8 @@ async function downloadZip()
         // 第二轮：并发下载并写入 zip
         await runPool(plan, async (t) =>
         {
-            zip.file(t.dst, await fetchBlob(t.repo, t.branch, t.src));
+            // 自动生成的库入口 SKILL.md 没有远端文件，直接写文本
+            zip.file(t.dst, t.text !== undefined ? t.text : await fetchBlob(t.repo, t.branch, t.src));
             fileDone++;
             btn.textContent = "下载 " + fileDone + "/" + fileAll;
         }, ZIP_POOL);
@@ -1009,9 +1046,9 @@ async function downloadZip()
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 
-        let msg = "<b>已生成 ZIP</b>：" + skillTotal + " 个技能、" + fileAll + " 个文件、"
-            + (blob.size / 1048576).toFixed(1) + " MB<br>"
-            + "导入方式：CC Switch → Skills → 添加 Skill → 从 ZIP 安装";
+        let msg = "<b>已生成 ZIP</b>：" + libTotal + " 个技能库（内含 " + skillTotal + " 个技能）、"
+            + fileAll + " 个文件、" + (blob.size / 1048576).toFixed(1) + " MB<br>"
+            + "导入方式：CC Switch → Skills → 添加 Skill → 从 ZIP 安装，每个库显示为一条记录";
         if (skipped.length)
         {
             msg += '<br><span class="warn">跳过 ' + skipped.length + " 个库：</span><br>" + skipped.map(esc).join("<br>");
