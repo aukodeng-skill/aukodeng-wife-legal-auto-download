@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "wife-legal-skills": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "D:\\Git\\ai-skills\\wife-legal"
+      ]
+    }
+  }
+}
