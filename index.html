@@ -4,159 +4,197 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>律师技能管理台 · wife-legal</title>
+<!-- 内联 SVG 图标：避免浏览器默认请求 /favicon.ico 产生 404 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f4bd8'/%3E%3Cpath d='M16 7v18M9 12h14M11 12l-4 8h8zM21 12l-4 8h8z' stroke='%23fff' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
+/* ===== 设计变量：中性灰底 + 单一强调色，保持信息优先 ===== */
 :root{
-    --bg:#f6f7f9; --panel:#ffffff; --ink:#1c2430; --sub:#6b7684;
-    --brand:#3b5bdb; --brand-ink:#fff; --line:#e3e7ee;
-    --ok:#2f9e44; --warn:#e8590c; --chip:#eef2ff; --danger:#c92a2a;
+    --bg:#f4f6fa; --panel:#ffffff; --ink:#111827; --sub:#667085; --mute:#98a2b3;
+    --brand:#2f4bd8; --brand-soft:#eef1fe; --line:#e4e8f0; --line-2:#f0f3f8;
+    --ok:#0f7b57; --ok-soft:#e8f7f0; --warn:#b45309; --warn-soft:#fdf4e8;
+    --danger:#b42318; --danger-soft:#fdecea;
     --mono:"Cascadia Code",Consolas,"JetBrains Mono",monospace;
+    --r:14px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Segoe UI","Microsoft YaHei",-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
-.wrap{max-width:1080px;margin:0 auto;padding:32px 20px 110px}
-header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
-h1{font-size:24px;font-weight:700}
-header .tag{font-size:13px;color:var(--sub)}
-.sub{color:var(--sub);font-size:14px;margin-bottom:20px}
-/* 使用建议折叠区 */
-.guide{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0 18px;margin-bottom:16px;font-size:13px;color:var(--sub)}
-.guide summary{cursor:pointer;padding:12px 0;font-size:14px;color:var(--ink);font-weight:600;list-style:none}
-.guide summary::-webkit-details-marker{display:none}
-.guide summary::before{content:"\25B8\00a0";color:var(--brand)}
-.guide[open] summary::before{content:"\25BE\00a0"}
-.guide .body{padding:0 0 14px}
-.guide ul{margin:0;padding-left:20px}
-.guide li{margin-bottom:6px}
-.guide b{color:var(--ink)}
-.guide code{font-family:var(--mono);background:#f1f3f7;border-radius:4px;padding:1px 5px;font-size:12px;color:var(--ink)}
-/* 顶部控制区 */
-.controls{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:14px;position:sticky;top:12px;z-index:10;box-shadow:0 2px 10px rgba(28,36,48,.05)}
-.ctrl{display:flex;flex-direction:column;gap:4px}
-.ctrl label{font-size:12px;color:var(--sub)}
-.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seg button{padding:6px 16px;border:0;background:#fff;font-size:13px;cursor:pointer;color:var(--sub)}
-.seg button.on{background:var(--brand);color:var(--brand-ink)}
-.ctrl input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;width:220px}
-.stats{margin-left:auto;font-size:13px;color:var(--sub);white-space:nowrap}
-.stats b{color:var(--ink);font-size:16px}
-.btn{padding:7px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;cursor:pointer;color:var(--ink)}
+html{scroll-behavior:smooth}
+body{font-family:"Segoe UI","Microsoft YaHei",-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px 130px}
+code{font-family:var(--mono)}
+
+/* ===== 页头 ===== */
+.top{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:26px 0 18px}
+.top h1{font-size:21px;font-weight:700;letter-spacing:-.01em;line-height:1.25}
+.top .sub{font-size:12.5px;color:var(--sub);padding-bottom:3px}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.stat{font-size:12.5px;color:var(--sub)}
+.stat b{font-size:15px;color:var(--ink);font-weight:700}
+.stat b.hot{color:var(--brand)}
+
+
+
+/* ===== 工具条（吸顶） ===== */
+.toolbar{position:sticky;top:0;z-index:30;background:rgba(244,246,250,.93);backdrop-filter:blur(10px);border-bottom:1px solid transparent;padding:10px 0 8px;margin-bottom:12px;transition:border-color .15s,box-shadow .15s}
+.toolbar.stuck{border-color:var(--line);box-shadow:0 4px 14px rgba(17,24,39,.04)}
+.tbrow{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.search{position:relative;flex:1;min-width:190px;max-width:330px}
+.search input{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px 9px 33px;font-size:12.5px;background:var(--panel);color:var(--ink);outline:none;font-family:inherit}
+.search input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.search::before{content:"\2315";position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mute);font-size:15px;line-height:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.seg button{padding:8px 13px;border:0;background:transparent;font-size:12.5px;cursor:pointer;color:var(--sub);font-family:inherit;white-space:nowrap}
+.seg button:hover{color:var(--brand)}
+.seg button.on{background:var(--ink);color:#fff}
+.switch{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--sub);cursor:pointer;user-select:none;padding:7px 11px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.switch input{width:15px;height:15px;accent-color:var(--warn);cursor:pointer}
+.tbrow .spacer{margin-left:auto}
+.resline{font-size:12px;color:var(--mute);white-space:nowrap}
+.resline b{color:var(--ink)}
+.btn{padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-size:12.5px;cursor:pointer;color:var(--ink);font-family:inherit;white-space:nowrap}
 .btn:hover{border-color:var(--brand);color:var(--brand)}
 .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
-.btn.danger{color:var(--danger);border-color:#ffc9c9}
-.link{font-size:13px;color:var(--brand);text-decoration:none}
-.link:hover{text-decoration:underline}
-/* 大型库开关 */
-.switch{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none}
-.switch input{width:16px;height:16px;accent-color:var(--warn)}
-/* 模式条 */
-.modebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:var(--sub)}
-.modebar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
-.modebar .dot.off{background:var(--warn)}
-/* 分类条 */
-.cats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-.cat{padding:5px 14px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:13px;cursor:pointer;color:var(--sub)}
-.cat.on{background:var(--chip);border-color:var(--brand);color:var(--brand);font-weight:600}
-.cat .n{font-size:11px;opacity:.7;margin-left:4px}
-/* 仓库卡片 */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;transition:box-shadow .15s,border-color .15s;position:relative}
-.card:hover{box-shadow:0 4px 14px rgba(28,36,48,.08)}
+.btn.primary:hover{filter:brightness(1.06);color:#fff}
+.btn.danger{color:var(--danger);border-color:#f6cfcb;background:var(--danger-soft)}
+
+/* ===== 分类条 ===== */
+.cats{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.cat{padding:5px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:12.5px;cursor:pointer;color:var(--sub);transition:.12s}
+.cat:hover{border-color:var(--brand);color:var(--brand)}
+.cat.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.cat .n{font-size:11px;opacity:.75;margin-left:5px}
+.scaninfo{font-size:12px;color:var(--ok);margin-top:7px}
+.scaninfo:empty{display:none}
+
+/* ===== 卡片视图 ===== */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;position:relative;transition:box-shadow .15s,border-color .15s}
+.card:hover{box-shadow:0 2px 4px rgba(16,24,40,.04),0 8px 22px rgba(16,24,40,.07)}
 .card.sel{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
-.card.installed{border-left:3px solid var(--ok)}
-.card .row1{display:flex;align-items:center;gap:10px;margin-bottom:4px}
-.card input[type=checkbox]{width:17px;height:17px;accent-color:var(--brand);flex:none;cursor:pointer}
-.card .name{font-weight:600;font-size:15px;font-family:var(--mono);word-break:break-all;flex:1}
-.badge{flex:none;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--brand)}
-.badge.large{background:#fff4e6;color:var(--warn)}
-.badge.inst{background:#e6fcf0;color:var(--ok);font-weight:600}
-.badge.enabled{background:#eef2ff;color:var(--brand)}
-.card .note{font-size:13px;color:var(--sub);margin:4px 0 8px;min-height:38px}
-.card .meta{display:flex;gap:14px;font-size:12px;color:var(--sub);align-items:center;flex-wrap:wrap}
-.card .meta .skills{color:var(--ok);font-weight:600}
+.card.installed{border-left:3px solid var(--ok);padding-left:14px}
+.r1{display:flex;align-items:flex-start;gap:9px}
+.r1 input{width:16px;height:16px;margin-top:3px;accent-color:var(--brand);flex:none;cursor:pointer}
+.r1 .name{font-family:var(--mono);font-size:13.5px;font-weight:700;word-break:break-all;flex:1;line-height:1.5}
+.badge{flex:none;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand);white-space:nowrap;margin-top:2px}
+.badge.large{background:var(--warn-soft);color:var(--warn)}
+.badge.inst{background:var(--ok-soft);color:var(--ok);font-weight:600}
+.badge.en{background:#eef2ff;color:#3b4bc4}
+.card .note{font-size:12.5px;color:var(--sub);margin:7px 0 10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:38px}
+.card .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--mute)}
+.card .meta .sk{color:var(--ok);font-weight:600}
 .card .meta a{color:var(--brand);text-decoration:none}
 .card .meta a:hover{text-decoration:underline}
-/* 状态导入弹层 */
-.modal{position:fixed;inset:0;background:rgba(18,22,31,.5);display:none;align-items:center;justify-content:center;z-index:80}
+.card details.cg{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;font-size:12px;color:var(--sub)}
+.card details.cg summary{cursor:pointer;color:var(--brand);font-size:12px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none}
+.card details.cg summary::-webkit-details-marker{display:none}
+.card details.cg summary::before{content:"\25B8";font-size:9px;transition:transform .15s}
+.card details.cg[open] summary::before{transform:rotate(90deg)}
+.card details.cg ul{margin:7px 0 0;padding-left:16px}
+.card details.cg li{margin-bottom:3px;line-height:1.55}
+.card details.cg li b{color:var(--ink);font-weight:600}
+.card details.cg .no{margin-top:8px;padding-top:8px;border-top:1px dotted var(--line)}
+.card details.cg .no li b{color:var(--danger)}
+
+/* ===== 选型表视图 ===== */
+.tablewrap{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:auto;max-height:calc(100vh - 180px)}
+.seltable{width:100%;min-width:1020px;border-collapse:separate;border-spacing:0;font-size:12.5px}
+.seltable th{position:sticky;top:0;z-index:2;background:#f7f9fc;text-align:left;font-weight:600;font-size:11.5px;color:var(--sub);padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;letter-spacing:.02em}
+.seltable td{padding:11px 12px;border-bottom:1px solid var(--line-2);vertical-align:top;color:var(--sub)}
+.seltable tbody tr:last-child td{border-bottom:0}
+.seltable tbody tr:hover td{background:#fafbfe}
+.seltable .r{font-family:var(--mono);font-size:12px;color:var(--ink);font-weight:700;word-break:break-all}
+.seltable .d{font-size:11.5px;color:var(--mute);margin-top:4px;line-height:1.5}
+.seltable ul{margin:0;padding-left:14px}
+.seltable li{margin-bottom:4px;line-height:1.55}
+.seltable li b{color:var(--ink);font-weight:600}
+.seltable ul.no li b{color:var(--danger)}
+.seltable .cat2{white-space:nowrap;color:var(--ink);font-size:12px}
+.empty-tip{padding:34px 16px;text-align:center;color:var(--mute);font-size:13px}
+
+/* ===== 状态导入弹层 ===== */
+.modal{position:fixed;inset:0;background:rgba(17,24,39,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:80;padding:20px}
 .modal.open{display:flex}
-.modal .box{background:#fff;border-radius:12px;max-width:640px;width:92%;padding:20px 24px}
-.modal h3{font-size:16px;margin-bottom:6px}
-.modal p{font-size:13px;color:var(--sub);margin-bottom:10px}
-.modal pre{background:#0a0e15;color:#e8ecf3;border:1px solid #2a3140;border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:110px;margin-bottom:10px}
-.modal textarea{width:100%;height:140px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:12px;resize:vertical}
-.modal .acts{display:flex;gap:10px;margin-top:12px;justify-content:flex-end}
-/* 底部命令面板 */
-.cmdpanel{position:fixed;left:0;right:0;bottom:0;background:#12161f;color:#e8ecf3;border-top:1px solid #2a3140;transform:translateY(100%);transition:transform .25s;z-index:50}
+.modal .box{background:#fff;border-radius:16px;max-width:620px;width:100%;padding:22px 24px;box-shadow:0 20px 50px rgba(17,24,39,.25)}
+.modal h3{font-size:16px;margin-bottom:8px}
+.modal p{font-size:12.5px;color:var(--sub);margin-bottom:8px}
+.modal pre{background:#0a1020;color:#dfe6f3;border:1px solid #27314b;border-radius:9px;padding:10px 12px;font-family:var(--mono);font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:100px;margin-bottom:10px}
+.modal textarea{width:100%;height:130px;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:var(--mono);font-size:12px;resize:vertical;outline:none}
+.modal textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.modal .acts{display:flex;gap:9px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap}
+
+/* ===== 底部命令面板 ===== */
+.cmdpanel{position:fixed;left:0;right:0;bottom:0;background:#0f1524;color:#e6ebf5;border-top:1px solid #26304a;transform:translateY(101%);transition:transform .28s cubic-bezier(.4,0,.2,1);z-index:60;box-shadow:0 -10px 40px rgba(17,24,39,.3)}
 .cmdpanel.open{transform:translateY(0)}
-.cmdpanel .inner{max-width:1080px;margin:0 auto;padding:14px 20px 16px}
-.cmdhead{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
-.cmdhead .t{font-size:14px;font-weight:600}
-.cmdhead .hint{font-size:12px;color:#8b94a7}
-.cmdhead button{margin-left:auto;padding:6px 16px;border-radius:8px;border:0;cursor:pointer;font-size:13px}
-.acts2{display:flex;border:1px solid #2a3140;border-radius:8px;overflow:hidden}
-.acts2 button{padding:5px 14px;border:0;background:#1a2130;color:#8b94a7;font-size:12.5px;cursor:pointer}
+.cmdpanel .inner{max-width:1120px;margin:0 auto;padding:14px 20px 18px}
+.cmdhead{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.cmdhead .t{font-size:13.5px;font-weight:600}
+.cmdhead .hint{font-size:11.5px;color:#8895b2}
+.cmdhead #root{background:#141c2e;border:1px solid #2b3550;border-radius:9px;padding:6px 10px;font-size:12px;color:#dbe4f3;outline:none;width:210px;font-family:inherit}
+.cmdhead #root::placeholder{color:#5f6b85}
+.cmdhead #root:focus{border-color:var(--brand)}
+.acts2{display:flex;border:1px solid #2b3550;border-radius:9px;overflow:hidden}
+.acts2 button{padding:6px 12px;border:0;background:#182034;color:#93a0bd;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.acts2 button:hover{color:#dbe4f3}
 .acts2 button.on{background:var(--brand);color:#fff}
-.copy{background:var(--brand);color:#fff}
+.cmdhead .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.copy{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:7px 16px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.copy:hover{filter:brightness(1.08)}
 .copy.ok{background:var(--ok)}
-.export{background:#2a3140;color:#e8ecf3;border:1px solid #3a4254}
-pre{background:#0a0e15;border:1px solid #2a3140;border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto}
-/* 悬浮球 */
-.fab{position:fixed;right:24px;bottom:24px;background:var(--brand);color:#fff;border-radius:999px;padding:12px 22px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(59,91,219,.4);z-index:40;border:0}
-.fab .cnt{background:#fff;color:var(--brand);border-radius:999px;padding:0 8px;margin-left:6px;font-size:12px}
-.toast{position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--ink);color:#fff;padding:8px 20px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;z-index:99;pointer-events:none}
+.export{background:#1c2438;color:#c3cddf;border:1px solid #2b3550;border-radius:9px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-family:inherit}
+.export:hover{border-color:#3d4a6b;color:#fff}
+#cmdOut{background:#080d18;border:1px solid #232c44;border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;color:#d5e0f0;overflow:auto;white-space:pre-wrap;word-break:break-all;max-height:220px;line-height:1.7;margin:0}
+
+/* ===== 悬浮按钮与提示 ===== */
+.fab{position:fixed;right:24px;bottom:24px;background:var(--brand);color:#fff;border:0;border-radius:999px;padding:13px 20px;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(47,75,216,.38);z-index:40;display:flex;align-items:center;gap:8px;font-family:inherit}
+.fab:hover{filter:brightness(1.06)}
+.fab .cnt{background:rgba(255,255,255,.22);border-radius:999px;padding:0 8px;font-size:12px}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-14px);background:var(--ink);color:#fff;padding:9px 20px;border-radius:10px;font-size:12.5px;opacity:0;transition:.25s;z-index:99;pointer-events:none;box-shadow:0 8px 24px rgba(17,24,39,.3)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-@media(max-width:640px){.stats{margin-left:0}}
+
+@media(max-width:760px){
+    .top{align-items:flex-start}
+    .top .right{margin-left:0;width:100%}
+    .cmdline{flex-direction:column}
+    .cmdline button{padding:10px}
+    .search{max-width:none;flex:1 1 100%}
+    .cmdhead .right{margin-left:0;width:100%}
+    .cmdhead #root{width:100%}
+    .grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-    <header>
+    <div class="top">
         <h1>律师技能管理台</h1>
-        <span class="tag">aukodeng-skill / wife-legal · 34 仓 · 10 分类</span>
-    </header>
-    <p class="sub">勾选技能仓后生成「安装 / 更新 / 删除」命令；导入本地扫描状态可标记已安装；离线模式支持从离线压缩包部署，全程不通网。</p>
-
-    <details class="guide" open>
-        <summary>什么时候用这个管理台？</summary>
-        <div class="body">
-            <ul>
-                <li><b>只想先装 1–2 个技能库试水</b>：在下面按分类勾选，点「生成命令」，把命令粘到终端执行即可。</li>
-                <li><b>不确定本机装了什么</b>：点「导入本地状态」跑一次 <code>scan</code>，页面会按扫描结果标出「已安装」，避免重复安装。</li>
-                <li><b>要给内网或团队机器批量铺装</b>：先在联网机器下载离线压缩包，目标机切「离线模式」，命令改从压缩包安装，全程不访问 GitHub。</li>
-                <li><b>要清理或换库</b>：勾选要移除的仓，用「删除」命令；脚本执行时会二次确认，不会误删其他目录。</li>
-                <li><b>2 万+ 技能的超大库（如 legal-skills-open）</b>：默认不参与，确实需要再勾「包含大型库」，否则克隆和加载都会很慢。</li>
-                <li><b>只想一键装全部</b>：直接跑 <code>deploy.cmd</code> / <code>deploy.sh</code> 就行，这个页面不是必需品。</li>
-            </ul>
+        <div class="sub">aukodeng-skill / wife-legal · 34 个技能库 · 10 个分类</div>
+        <div class="right">
+            <div class="stat">已选 <b class="hot" id="cnt">0</b></div>
+            <div class="stat">已安装 <b id="instCnt">0</b></div>
         </div>
-    </details>
+    </div>
 
-    <div class="controls">
-        <div class="ctrl">
-            <label>目标平台</label>
+    <div class="toolbar" id="toolbar">
+        <div class="tbrow">
+            <div class="search"><input type="text" id="q" placeholder="搜索库名 / 简介 / 使用场景"></div>
             <div class="seg" id="seg">
                 <button data-os="win" class="on">Windows</button>
                 <button data-os="mac">macOS / Linux</button>
             </div>
+            <div class="seg" id="viewSeg">
+                <button data-view="cards" class="on">卡片</button>
+                <button data-view="table">选型表</button>
+            </div>
+            <label class="switch" title="large=1 的仓库技能数量巨大，默认不参与"><input type="checkbox" id="inclLarge"> 包含大型库</label>
+            <div class="spacer"></div>
+            <span class="resline" id="resCnt"></span>
+            <button class="btn" id="scanBtn">导入本地状态</button>
         </div>
-        <div class="ctrl">
-            <label>安装根目录（可选）</label>
-            <input type="text" id="root" placeholder="留空 = 脚本默认路径">
-        </div>
-        <label class="switch" title="large=1 的仓库技能数量巨大，默认不参与">
-            <input type="checkbox" id="inclLarge"> 包含大型库（2 万+ 技能）
-        </label>
-        <button class="btn" id="scanBtn">导入本地状态</button>
-        <button class="btn primary" id="offlineBtn">离线模式：未开启</button>
-        <div class="stats">已选 <b id="cnt">0</b> · 已安装 <b id="instCnt">0</b></div>
+        <div class="cats" id="cats"></div>
+        <div class="scaninfo" id="scanInfo"></div>
     </div>
 
-    <div class="modebar" id="modebar">
-        <span><span class="dot" id="modeDot"></span><span id="modeText">在线模式：命令会从 GitHub 克隆技能仓</span></span>
-        <a class="link" id="bundleLink" target="_blank" rel="noopener" href="https://github.com/aukodeng-skill/aukodeng-wife-legal-auto-download/releases/tag/offline-bundle">下载离线压缩包 ↗</a>
-        <span style="margin-left:auto" id="scanInfo"></span>
-    </div>
-
-    <div class="cats" id="cats"></div>
     <div class="grid" id="grid"></div>
+    <div class="tablewrap" id="tableWrap" style="display:none"><table class="seltable" id="selTable"></table></div>
 </div>
 
 <button class="fab" id="fab">生成命令<span class="cnt" id="fabCnt">0</span></button>
@@ -168,12 +206,16 @@ pre{background:#0a0e15;border:1px solid #2a3140;border-radius:8px;padding:12px 1
                 <button data-act="install" class="on">安装</button>
                 <button data-act="update">更新</button>
                 <button data-act="uninstall">删除</button>
+                <button data-act="disable">停用</button>
                 <button data-act="enable">启用进项目</button>
                 <button data-act="scan">扫描命令</button>
             </div>
+            <input type="text" id="root" placeholder="安装根目录（可选）">
             <span class="hint" id="hint"></span>
-            <button class="copy" id="copyBtn">复制命令</button>
-            <button class="export" id="exportBtn">导出配置</button>
+            <div class="right">
+                <button class="export" id="exportBtn">导出配置</button>
+                <button class="copy" id="copyBtn">复制命令</button>
+            </div>
         </div>
         <pre id="cmdOut">（尚未选择任何技能仓）</pre>
     </div>
@@ -198,283 +240,555 @@ pre{background:#0a0e15;border:1px solid #2a3140;border-radius:8px;padding:12px 1
 <div class="toast" id="toast"></div>
 
 <script>
-// catalog.tsv 数据（来源：aukodeng-wife-legal-auto-download main 分支）
 const DATA = [
-["Legal-Skills-Chinese","综合技能库","THUYRan/Legal-Skills-Chinese",0,76,"中文法律技能合集，覆盖合同、诉讼、合规等通用场景"],
-["legal-skills","综合技能库","pa1nrui1/legal-skills",0,2,"中文法律工作流（尽调、文书），含检索脚本"],
-["lawyerDU","综合技能库","law086com/lawyerDU",0,null,"律师实务技能与提示词合集"],
-["claude-for-legal","综合技能库","anthropics/claude-for-legal",0,null,"Anthropic 官方法律技能示例（英文，美国法）"],
-["legal-skills-1","综合技能库","cat-xierluo/legal-skills",0,72,"中文法律人技能集合，更新活跃"],
-["legal-skills-2","综合技能库","gfodor/legal-skills",0,3,"英文法律技能（合同、检索），GPL-3.0"],
-["lq-skills","综合技能库","LegalQuants/lq-skills",0,52,"面向律师与法律工程师的技能集合"],
-["mini-claude-for-legal","综合技能库","sboghossian/mini-claude-for-legal",1,982,"大型英文技能库（982 个 SKILL.md），默认不启用"],
-["legal-skills-open","综合技能库","ThomasMoreAI/legal-skills-open",1,20295,"超大法律技能库（2 万+ SKILL.md），默认不启用"],
-["awesome-legal-skills","综合技能库","lawve-ai/awesome-legal-skills",1,281,"法律技能索引与合集，默认不启用"],
-["ai-legal-claude","合同与商事","zubair-trabzada/ai-legal-claude",0,14,"合同审查、NDA、合规风险，1.8k star"],
-["claude-legal-skill","合同与商事","evolsb/claude-legal-skill",0,1,"基于 CUAD 数据集的合同条款审查"],
-["contract-copilot.skill","合同与商事","cat-xierluo/contract-copilot.skill",0,1,"中文合同起草与审查副驾"],
-["new-litigation-visualization","诉讼与争议解决","MiaoQichuan/new-litigation-visualization",0,8,"诉讼可视化与庭审表达（8 个模块）"],
-["cn-litigation-toolkit","诉讼与争议解决","Youchu-lawhub/cn-litigation-toolkit",0,23,"中国诉讼工具箱（立案、证据、庭审）"],
-["china-lawyer-analyst","诉讼与争议解决","CSlawyer1985/china-lawyer-analyst",0,1,"中国律师案件分析与策略"],
-["uae-offplan-dispute-skill","诉讼与争议解决","qgardens2buyer/uae-offplan-dispute-skill",0,1,"UAE 期房买卖争议与仲裁要点"],
-["legal-research-skill","法律检索与类案","Golden2002/legal-research-skill",0,2,"法律检索流程与引证规范"],
-["cn-law-hub","法律检索与类案","ZongziForu/cn-law-hub",0,1,"中国法条检索与法源定位"],
-["china-law-case-analysis-skills","法律检索与类案","wesky820/china-law-case-analysis-skills",0,1,"类案检索与裁判要旨分析"],
-["dingduff-public","法律检索与类案","DingDuff/dingduff-public",0,5,"检索技能与 Claude 插件"],
-["cn-labor-law-skills","劳动与用工","peter111999/cn-labor-law-skills",0,17,"中国劳动法：入职、解除、竞业、劳动仲裁"],
-["worker-rights-cn","劳动与用工","90le/worker-rights-cn",0,11,"劳动者维权：加班费、工伤、仲裁流程"],
-["family-lawyer-skills","婚姻家事","yiyanli123/family-lawyer-skills",0,2,"婚姻家事：离婚、财产分割、抚养权"],
-["Claude-Patent-Creator","知识产权","RobThePCGuy/Claude-Patent-Creator",0,17,"美国专利撰写与 USPTO 流程"],
-["cn-patent-drafter","知识产权","handsomeZR-netizen/cn-patent-drafter",0,1,"中国专利撰写"],
-["patent-skills","知识产权","Obviously-Not/patent-skills",0,4,"专利检索、撰写与审查意见答复"],
-["Claude-Skills-Governance-Risk-and-Compliance","合规与企业法务","Sushegaad/Claude-Skills-Governance-Risk-and-Compliance",0,36,"GRC：治理、风险、合规（1k star）"],
-["SOE-Legal-Checker","合规与企业法务","HsuanZhao/SOE-Legal-Checker",0,1,"国企合规与法律审核"],
-["qulv-china-legal-counsel-skill","合规与企业法务","Daknniel-0881/qulv-china-legal-counsel-skill",0,1,"企业法律顾问日常（合同、用印、纠纷）"],
-["legal-document-assistant","法律文书与翻译","fayayy888/legal-document-assistant",0,7,"法律文书起草与校对"],
-["Chinese-English-Legal-Translation-Skill","法律文书与翻译","StefanCHEN2026/Chinese-English-Legal-Translation-Skill",0,1,"中英法律翻译术语与句式"],
-["AI-Skills-German-Law","域外法","borghei/AI-Skills-German-Law",0,319,"德国法技能库（319 个 SKILL.md）"],
-["commercial-legal-pl","域外法","apiotrowski-afk/commercial-legal-pl",0,10,"波兰商事法（英文/波兰文）"],
+["Legal-Skills-Chinese","综合技能库","THUYRan/Legal-Skills-Chinese",0,76,"中文法律技能合集，覆盖合同、诉讼、合规等通用场景",
+ "手头是中文案件，需要从「读案情→抽要素→找法条→搭论证→出文书」跑通一条完整链路；需要一个覆盖面最广的底座库，先装上再按需补专项库；需要法律推理方法类技能（演绎、归纳、类比、反事实、解释论证、价值判断）；需要法条检索、类案检索、裁判文书摘要与格式规范",
+ "处理美国法、德国法、波兰法等域外法（请用 claude-for-legal、AI-Skills-German-Law、commercial-legal-pl）；只做专利申请文件撰写（请用 cn-patent-drafter 或 patent-skills）；只做中英法律翻译（请用 Chinese-English-Legal-Translation-Skill）",
+ "skills"],
+["legal-skills","综合技能库","pa1nrui1/legal-skills",0,2,"中文法律工作流（尽调、文书），含检索脚本",
+ "要做一份法律尽职调查，希望有固定步骤和检查项，而不是临时想；要起草文书并复用现成模板；希望技能自带检索脚本，减少手工检索",
+ "需要大量细分技能做自由组合（请用 Legal-Skills-Chinese 或 legal-skills-1）；域外法工作",
+ "skills"],
+["lawyerDU","综合技能库","law086com/lawyerDU",0,null,"律师实务技能与提示词合集",
+ "想要按律师工作场景组织的提示词，而不是按法律学科拆分的技能；同时使用 Trae / Claude Code / Codex / Cursor / OpenCode，希望一套内容多端可用；需要快速上手，不想先理解技能之间的依赖关系",
+ "需要可被 AI 精确触发、带明确 description 的技能（本库更偏提示词合集）；域外法专项工作",
+ "skills"],
+["claude-for-legal","综合技能库","anthropics/claude-for-legal",0,null,"Anthropic 官方法律技能示例（英文，美国法）",
+ "处理英文合同、美国法合规、跨境交易中的美国法部分；想照着官方范例写自己的技能或插件（目录结构、SKILL.md 写法最规范）；需要分领域成套使用（commercial / corporate / employment / ip / litigation / privacy / product / regulatory）",
+ "中国大陆法域的法律意见；需要中文文书输出的场景",
+ ""],
+["legal-skills-1","综合技能库","cat-xierluo/legal-skills",0,72,"中文法律人技能集合，更新活跃",
+ "想用中文技能且偏好更新频繁、维护活跃的库；需要按角色或业务成组使用（expert-suites）；与 contract-copilot.skill 同一作者，想配套使用合同类能力",
+ "需要稳定不变的内容基线（更新活跃意味着内容会变）；域外法工作",
+ "skills"],
+["legal-skills-2","综合技能库","gfodor/legal-skills",0,3,"英文法律技能（合同、检索），GPL-3.0",
+ "需要对一批专利做审计或风险评估；需要模拟审查员视角审阅权利要求；需要做规避设计（design around）分析",
+ "中国专利申请文件撰写（请用 cn-patent-drafter）；美国专利撰写与 USPTO 流程（请用 Claude-Patent-Creator）；不接受 GPL-3.0 许可的场景",
+ ""],
+["lq-skills","综合技能库","LegalQuants/lq-skills",0,52,"面向律师与法律工程师的技能集合",
+ "要处理几十上百份合同或判决，需要批量化与结构化输出；想把法律判断做成可复现、可评测的流程；团队里有法律工程师角色，需要工程化技能底座",
+ "只需要写一份法律意见书或代理词（用 legal-document-assistant）；需要庭审可视化（用 new-litigation-visualization）",
+ "skills"],
+["mini-claude-for-legal","综合技能库","sboghossian/mini-claude-for-legal",1,982,"大型英文技能库（982 个 SKILL.md），默认不启用",
+ "遇到很具体、冷门的英文法律问题，常见库里找不到；愿意按关键词在 982 个技能里筛，而不是一次性全装；需要英文模板与条款颗粒度较细的素材",
+ "日常中文法务（体量太大，检索成本高于收益）；网络受限或磁盘紧张的环境",
+ "skills"],
+["legal-skills-open","综合技能库","ThomasMoreAI/legal-skills-open",1,20295,"超大法律技能库（2 万+ SKILL.md），默认不启用",
+ "客户涉及多国业务，需要同一问题在不同法域的对照；需要在某个小众法域（如沙特、越南、秘鲁）找现成技能；做跨境合规盘点，需要按国家批量比对",
+ "只做中国大陆业务（用 Legal-Skills-Chinese 足够）；带宽或磁盘紧张（仓库极大，2 万+ 文件）",
+ ""],
+["awesome-legal-skills","综合技能库","lawve-ai/awesome-legal-skills",1,281,"法律技能索引与合集，默认不启用",
+ "第一次搭建法律技能环境，想先看清全貌；为团队制定「该装哪些技能」的清单；按主题（合同、诉讼、合规…）快速定位候选技能",
+ "需要能直接产出法律成果的技能（本库偏索引）；要求技能之间互相配套成流程",
+ "skills"],
+["ai-legal-claude","合同与商事","zubair-trabzada/ai-legal-claude",0,14,"合同审查、NDA、合规风险，1.8k star",
+ "收到一份英文合同要做审查意见；要审 NDA 并标出偏离标准的条款；需要按风险等级输出条款清单",
+ "中文合同起草与审查（用 contract-copilot.skill 或 Legal-Skills-Chinese）；需要中国法下的合同效力与违约责任判断",
+ "skills"],
+["claude-legal-skill","合同与商事","evolsb/claude-legal-skill",0,1,"基于 CUAD 数据集的合同条款审查",
+ "要对英文合同做条款级机器审查，且希望对齐 CUAD 标准；做合同数据集标注、批量条款抽取；需要一个轻量单技能，不想装整个库",
+ "中文合同审查；需要多技能组合的完整合同工作流",
+ "examples"],
+["contract-copilot.skill","合同与商事","cat-xierluo/contract-copilot.skill",0,1,"中文合同起草与审查副驾",
+ "要起草一份中文合同，希望有结构化的条款骨架；要审一份中文合同并给出修改建议；需要套用现成模板（templates/）快速出稿",
+ "需要诉讼文书或庭审准备（用 legal-document-assistant、cn-litigation-toolkit）；英文合同审查（用 ai-legal-claude）",
+ ""],
+["new-litigation-visualization","诉讼与争议解决","MiaoQichuan/new-litigation-visualization",0,8,"诉讼可视化与庭审表达（8 个模块）",
+ "案情复杂、人物与时间线多，需要用图讲清；准备庭审陈述，需要把事实与证据按说服逻辑组织；要向客户或合议庭做案件汇报，需要可视化材料",
+ "只做法条检索（用 cn-law-hub）；只做合同审查（用 contract-copilot.skill）",
+ "plugins"],
+["cn-litigation-toolkit","诉讼与争议解决","Youchu-lawhub/cn-litigation-toolkit",0,23,"中国诉讼工具箱（立案、证据、庭审）",
+ "要准备立案材料（起诉状、证据清单、管辖分析）；要系统整理证据并设计举证质证方案；要按案件维度管理进度（matters/）",
+ "只做法律检索（用 cn-law-hub、china-law-case-analysis-skills）；做合同起草（用 contract-copilot.skill）",
+ "skills"],
+["china-lawyer-analyst","诉讼与争议解决","CSlawyer1985/china-lawyer-analyst",0,1,"中国律师案件分析与策略",
+ "接案初期要判断「这个案子能不能打、怎么打」；需要把零散事实组织成争点与请求权体系；要给客户一份案件分析与策略建议",
+ "只需要法条或类案（用 cn-law-hub、china-law-case-analysis-skills）；只需要出文书（用 legal-document-assistant）",
+ ""],
+["uae-offplan-dispute-skill","诉讼与争议解决","qgardens2buyer/uae-offplan-dispute-skill",0,1,"UAE 期房买卖争议与仲裁要点",
+ "客户在迪拜买了期房，项目延期或取消，要评估救济路径；需要 UAE 期房相关合同条款与仲裁程序的基本框架；做跨境房产争议的初步尽调",
+ "中国商品房买卖合同纠纷；其他中东国家（本库只覆盖 UAE）",
+ ""],
+["legal-research-skill","法律检索与类案","Golden2002/legal-research-skill",0,2,"法律检索流程与引证规范",
+ "要写法律研究备忘录，需要规范的检索与引证流程；检索结果杂乱，需要一套整理与核验步骤；需要把检索结论导出为 docx",
+ "需要直接定位中国现行法条（用 cn-law-hub）；需要类案裁判要旨（用 china-law-case-analysis-skills）",
+ ""],
+["cn-law-hub","法律检索与类案","ZongziForu/cn-law-hub",0,1,"中国法条检索与法源定位",
+ "要确认某条规定现在还有没有效、被哪次修订改过；需要判断地方性法规与上位法是否冲突；写作中要引用准确的法条原文与条号",
+ "需要类案与裁判要旨（用 china-law-case-analysis-skills）；需要域外法条（用 legal-skills-open 或对应国别库）",
+ ""],
+["china-law-case-analysis-skills","法律检索与类案","wesky820/china-law-case-analysis-skills",0,1,"类案检索与裁判要旨分析",
+ "要写代理词或意见书，需要类案支撑自己的观点；要判断某类争议在本地法院的常见裁判尺度；案由明确（如买卖合同纠纷、劳动争议、离婚纠纷），想直接找对应分析",
+ "只需要法条原文（用 cn-law-hub）；需要刑事辩护思路",
+ ""],
+["dingduff-public","法律检索与类案","DingDuff/dingduff-public",0,5,"检索技能与 Claude 插件",
+ "习惯用 Claude 插件市场方式管理技能；需要一组可组合的检索类技能；想参考插件仓库的组织方式",
+ "需要开箱即用的中国法条原文库（用 cn-law-hub）；不想引入插件层，只要一个 SKILL.md",
+ "plugins"],
+["cn-labor-law-skills","劳动与用工","peter111999/cn-labor-law-skills",0,17,"中国劳动法：入职、解除、竞业、劳动仲裁",
+ "企业侧要设计或审查劳动合同、员工手册、规章制度；要处理解除劳动关系、经济补偿、竞业限制纠纷；要准备或应对劳动仲裁；做用工合规体检",
+ "代理劳动者个人维权（用 worker-rights-cn）；非中国法域的雇佣问题",
+ "skills"],
+["worker-rights-cn","劳动与用工","90le/worker-rights-cn",0,11,"劳动者维权：加班费、工伤、仲裁流程",
+ "帮劳动者算加班费、主张经济补偿或赔偿金；处理工伤认定与赔偿项目计算；指导当事人走劳动仲裁流程、准备材料",
+ "企业侧制度设计与合规审查（用 cn-labor-law-skills）；非中国法域",
+ "plugins"],
+["family-lawyer-skills","婚姻家事","yiyanli123/family-lawyer-skills",0,2,"婚姻家事：离婚、财产分割、抚养权",
+ "起草离婚协议或离婚起诉状；梳理夫妻共同财产与债务分割方案；争取或抗辩抚养权、计算抚养费",
+ "继承与遗嘱（本库不含）；企业股权、劳动争议等非家事领域",
+ ""],
+["Claude-Patent-Creator","知识产权","RobThePCGuy/Claude-Patent-Creator",0,17,"美国专利撰写与 USPTO 流程",
+ "要撰写美国专利申请（provisional / non-provisional）；要起草或修改权利要求书；要答复 USPTO 审查意见（Office Action）",
+ "中国专利申请文件撰写（用 cn-patent-drafter）；专利检索与规避设计（用 patent-skills、legal-skills-2）",
+ "skills"],
+["cn-patent-drafter","知识产权","handsomeZR-netizen/cn-patent-drafter",0,1,"中国专利撰写",
+ "要把技术方案写成符合中国专利法要求的申请文件；需要权利要求书的撰写结构与布局思路；需要套用撰写模板与自查清单",
+ "美国专利撰写；专利检索、侵权比对与审查意见答复",
+ "examples"],
+["patent-skills","知识产权","Obviously-Not/patent-skills",0,4,"专利检索、撰写与审查意见答复",
+ "要在研发阶段扫描代码或产品的专利风险；要检索现有专利并做侵权比对；要答复审查意见或撰写答复思路",
+ "从零撰写中国专利申请文件；商标与著作权事务",
+ ""],
+["Claude-Skills-Governance-Risk-and-Compliance","合规与企业法务","Sushegaad/Claude-Skills-Governance-Risk-and-Compliance",0,36,"GRC：治理、风险、合规（1k star）",
+ "要做 GDPR / HIPAA / PCI / SOC 2 等合规差距分析；要准备 ISO 27001、ISO 42001、NIS2、DORA 认证材料；要评估 EU AI Act、EU CRA、NIST AI RMF 的适用义务；要给客户做 GRC 体系梳理与政策起草",
+ "中国网络安全法、数据安全法、个人信息保护法合规（本库无中国框架）；诉讼与争议解决",
+ "plugins"],
+["SOE-Legal-Checker","合规与企业法务","HsuanZhao/SOE-Legal-Checker",0,1,"国企合规与法律审核",
+ "要审一个国企的投资、担保、产权交易事项是否合规；要出法律审核意见书，需要对齐国资监管口径；要做三重一大事项的程序合规检查",
+ "民营企业日常合同审查（用 contract-copilot.skill）；诉讼与仲裁",
+ "examples"],
+["qulv-china-legal-counsel-skill","合规与企业法务","Daknniel-0881/qulv-china-legal-counsel-skill",0,1,"企业法律顾问日常（合同、用印、纠纷）",
+ "处理用印、合同审批这类高频法务流程；要给业务部门出日常法律咨询意见；要做纠纷的初步定性与处理建议",
+ "要打官司、准备庭审材料；国企三重一大专项审核（用 SOE-Legal-Checker）",
+ ""],
+["legal-document-assistant","法律文书与翻译","fayayy888/legal-document-assistant",0,7,"法律文书起草与校对",
+ "要写起诉状、答辩状、代理词、律师函等格式化文书；要出法律意见书或合同审查意见；要把写好的 Markdown 文书转成 PDF 交付",
+ "需要先做案件整体分析与策略（用 china-lawyer-analyst）；需要诉讼可视化（用 new-litigation-visualization）",
+ ""],
+["Chinese-English-Legal-Translation-Skill","法律文书与翻译","StefanCHEN2026/Chinese-English-Legal-Translation-Skill",0,1,"中英法律翻译术语与句式",
+ "要把中文合同翻成英文，或把英文合同翻成中文；需要统一术语译法，避免同一术语多种译法；要校对已有译文的法律表述是否准确",
+ "德语、波兰语等其他语种（用 AI-Skills-German-Law、commercial-legal-pl）；非法律文本的通用翻译",
+ ""],
+["AI-Skills-German-Law","域外法","borghei/AI-Skills-German-Law",0,319,"德国法技能库（319 个 SKILL.md）",
+ "客户在德国有业务，需要按德国法出意见；要做德国法下特定部门法（如 Arbeitsrecht、Datenschutzrecht、Insolvenzrecht）的分析；需要德国法下的欧盟法规衔接（CSRD、NIS2、DORA、KI-VO）",
+ "中国法或美国法工作；只要通用合规框架而不涉及德国法（用 GRC 库）",
+ ""],
+["commercial-legal-pl","域外法","apiotrowski-afk/commercial-legal-pl",0,10,"波兰商事法（英文/波兰文）",
+ "客户在波兰设公司或签商事合同；需要波兰商事法下的条款与程序要点；做中东欧跨境交易的波兰法部分",
+ "德国法（用 AI-Skills-German-Law）；波兰非商事领域",
+ "examples"],
 ];
 
 const REPO_URL = "https://github.com/aukodeng-skill/aukodeng-wife-legal-auto-download";
-const OFFLINE_ZIP = "wife-legal-offline-bundle.zip";
-let os = "win", cat = "全部", act = "install", sel = new Set();
-let offline = false;
-let scanState = null;   // 导入的本地扫描状态：{root, project, repos:{repo:{installed,enabled,head}}}
-try { const s = localStorage.getItem("wl-sel"); if (s) sel = new Set(JSON.parse(s)); } catch(e) {}
-try { const s = localStorage.getItem("wl-offline"); if (s) offline = s === "1"; } catch(e) {}
-try { const s = localStorage.getItem("wl-scan"); if (s) scanState = JSON.parse(s); } catch(e) {}
 
-function installed(repo){ return !!(scanState && scanState.repos && scanState.repos[repo] && scanState.repos[repo].installed); }
-function enabledCount(repo){ return (scanState && scanState.repos && scanState.repos[repo] && scanState.repos[repo].enabled) || 0; }
-function instTotal(){ return DATA.filter(r=>installed(r[0])).length; }
+// ===== 页面状态 =====
+let os = "win";          // 目标平台：win / mac
+let cat = "全部";        // 当前分类
+let act = "install";     // 当前动作：install / update / uninstall / disable / enable / scan
+let view = "cards";      // 当前视图：cards / table
+let q = "";              // 搜索关键字
+let sel = new Set();     // 已勾选的仓库
+let scanState = null;    // 导入的本地扫描状态
 
-// 分类条
+// 从本地存储恢复上次的选择、视图与状态，避免刷新后丢失
+try { const s = localStorage.getItem("wl-sel"); if (s) sel = new Set(JSON.parse(s)); } catch (e) { }
+try { const s = localStorage.getItem("wl-view"); if (s) view = s; } catch (e) { }
+try { const s = localStorage.getItem("wl-scan"); if (s) scanState = JSON.parse(s); } catch (e) { }
+
+// ===== 小工具 =====
+function esc(s)
+{
+    return String(s === null || s === undefined ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+let toastTimer = null;
+function toast(msg)
+{
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+// 扫描结果里每个仓的已安装 / 已启用信息（字段名做了兼容）
+function scanRows()
+{
+    if (!scanState) return [];
+    if (Array.isArray(scanState.installed)) return scanState.installed;
+    if (Array.isArray(scanState.repos)) return scanState.repos;
+    return [];
+}
+function installed(repo)
+{
+    return scanRows().some((x) => (x.repo || x.name) === repo);
+}
+function enabledCount(repo)
+{
+    const hit = scanRows().find((x) => (x.repo || x.name) === repo);
+    if (!hit) return 0;
+    if (typeof hit.enabled === "number") return hit.enabled;
+    if (Array.isArray(hit.enabledSkills)) return hit.enabledSkills.length;
+    if (Array.isArray(hit.links)) return hit.links.length;
+    return 0;
+}
+
+// ===== 分类条 =====
 const catCounts = {};
-DATA.forEach(r => catCounts[r[1]] = (catCounts[r[1]]||0)+1);
-const catsEl = document.getElementById("cats");
-[["全部", DATA.length], ...Object.entries(catCounts)].forEach(([name,n]) => {
-    const b = document.createElement("div");
-    b.className = "cat" + (name===cat ? " on":"");
-    b.innerHTML = name + '<span class="n">'+n+'</span>';
-    b.onclick = () => { cat = name; document.querySelectorAll(".cat").forEach(x=>x.classList.remove("on")); b.classList.add("on"); render(); };
-    catsEl.appendChild(b);
-});
+DATA.forEach((r) => { catCounts[r[1]] = (catCounts[r[1]] || 0) + 1; });
 
-// 卡片
-const grid = document.getElementById("grid");
-function render() {
-    grid.innerHTML = "";
-    const inclLarge = document.getElementById("inclLarge").checked;
-    DATA.forEach((r) => {
-        const [repo, category, upstream, large, skills, note] = r;
-        if (cat!=="全部" && category!==cat) return;
-        if (large && !inclLarge) return;
-        const inst = installed(repo), en = enabledCount(repo);
-        const c = document.createElement("div");
-        c.className = "card" + (sel.has(repo) ? " sel" : "") + (inst ? " installed" : "");
-        c.innerHTML = '<div class="row1">'
-            + '<input type="checkbox" '+(sel.has(repo)?"checked":"")+' aria-label="选择 '+repo+'">'
-            + '<span class="name">'+repo+'</span>'
-            + (large ? '<span class="badge large">大型库</span>' : '<span class="badge">'+category+'</span>')
-            + (inst ? '<span class="badge inst">已安装</span>' : '')
-            + (en ? '<span class="badge enabled">已启用 '+en+'</span>' : '')
-            + '</div>'
-            + '<div class="note">'+note+'</div>'
-            + '<div class="meta">'
-            + '<span class="skills">'+(skills==null?"—":skills)+' 个技能</span>'
-            + '<a href="https://github.com/'+upstream+'" target="_blank" rel="noopener">上游 ↗</a>'
-            + '</div>';
-        c.querySelector("input").onchange = (e) => {
-            e.target.checked ? sel.add(repo) : sel.delete(repo);
-            saveSel(); c.classList.toggle("sel", e.target.checked); updateCnt();
-        };
-        grid.appendChild(c);
+function renderCats()
+{
+    const el = document.getElementById("cats");
+    el.innerHTML = "";
+    const items = [["全部", DATA.length]].concat(Object.entries(catCounts));
+    items.forEach(([name, n]) => {
+        const b = document.createElement("div");
+        b.className = "cat" + (name === cat ? " on" : "");
+        b.innerHTML = esc(name) + '<span class="n">' + n + "</span>";
+        b.onclick = () => { cat = name; renderCats(); render(); };
+        el.appendChild(b);
     });
+}
+
+// ===== 文本加粗：把每条建议的首个分句（触发条件）加粗，便于快速扫读 =====
+function boldLead(text)
+{
+    const s = String(text || "");
+    const m = s.match(/^([^，、（(]+)/);
+    if (!m || m[1].length >= s.length)
+    {
+        const b = document.createElement("b");
+        b.textContent = s;
+        return b;
+    }
+    const frag = document.createDocumentFragment();
+    const b = document.createElement("b");
+    b.textContent = m[1];
+    frag.appendChild(b);
+    frag.appendChild(document.createTextNode(s.slice(m[1].length)));
+    return frag;
+}
+
+// 「；」分隔的多条建议渲染成列表，每条首个分句加粗
+function guideList(text, cls)
+{
+    const ul = document.createElement("ul");
+    if (cls) ul.className = cls;
+    String(text || "").split("；").filter(Boolean).forEach((x) => {
+        const li = document.createElement("li");
+        li.appendChild(boldLead(x));
+        ul.appendChild(li);
+    });
+    return ul;
+}
+
+// ===== 当前可见数据（分类 + 大型库 + 搜索） =====
+function visibleRows()
+{
+    const inclLarge = document.getElementById("inclLarge").checked;
+    const kw = q.trim().toLowerCase();
+    return DATA.filter((r) => {
+        const repo = r[0], category = r[1], large = r[3], note = r[5], use = r[6], skip = r[7];
+        if (cat !== "全部" && category !== cat) return false;
+        if (large && !inclLarge) return false;
+        if (!kw) return true;
+        return (repo + " " + category + " " + note + " " + use + " " + skip).toLowerCase().indexOf(kw) >= 0;
+    });
+}
+
+// ===== 选型表：与卡片共用同一份 DATA，保证只有一处维护 =====
+function renderSelTable()
+{
+    const t = document.getElementById("selTable");
+    if (!t) return;
+    t.innerHTML = "";
+    const thead = document.createElement("thead");
+    const trh = document.createElement("tr");
+    ["库", "分类", "什么时候用", "什么时候不要用"].forEach((h) => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    t.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    visibleRows().forEach((r) => {
+        const repo = r[0], category = r[1], skills = r[4], note = r[5], use = r[6], skip = r[7];
+        const tr = document.createElement("tr");
+
+        const c1 = document.createElement("td");
+        const nameEl = document.createElement("div");
+        nameEl.className = "r";
+        nameEl.textContent = repo;
+        c1.appendChild(nameEl);
+        const descEl = document.createElement("div");
+        descEl.className = "d";
+        descEl.textContent = note + (skills ? " · " + skills + " 个技能" : "");
+        c1.appendChild(descEl);
+        tr.appendChild(c1);
+
+        const c2 = document.createElement("td");
+        c2.className = "cat2";
+        c2.textContent = category;
+        tr.appendChild(c2);
+
+        const c3 = document.createElement("td");
+        c3.appendChild(guideList(use));
+        tr.appendChild(c3);
+
+        const c4 = document.createElement("td");
+        c4.appendChild(guideList(skip, "no"));
+        tr.appendChild(c4);
+
+        tbody.appendChild(tr);
+    });
+    t.appendChild(tbody);
+
+    if (tbody.children.length === 0)
+    {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 4;
+        td.className = "empty-tip";
+        td.textContent = "没有匹配的库，试试清空搜索或勾选「包含大型库」。";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    }
+}
+
+// ===== 卡片视图 =====
+function buildCardGuide(use, skip)
+{
+    const d = document.createElement("details");
+    d.className = "cg";
+    const s = document.createElement("summary");
+    s.textContent = "什么时候用 / 不要用";
+    d.appendChild(s);
+    d.appendChild(guideList(use));
+    d.appendChild(guideList(skip, "no"));
+    return d;
+}
+
+function render()
+{
+    const rows = visibleRows();
+    const g = document.getElementById("grid");
+    g.innerHTML = "";
+    rows.forEach((r) => {
+        const repo = r[0], upstream = r[2], large = r[3], skills = r[4], note = r[5], use = r[6], skip = r[7];
+        const c = document.createElement("div");
+        c.className = "card";
+        c.dataset.repo = repo;
+        if (sel.has(repo)) c.classList.add("sel");
+        if (installed(repo)) c.classList.add("installed");
+
+        let head = '<div class="r1">'
+            + '<input type="checkbox"' + (sel.has(repo) ? " checked" : "") + '>'
+            + '<div class="name">' + esc(repo) + "</div>";
+        if (installed(repo)) head += '<span class="badge inst">已安装</span>';
+        if (large) head += '<span class="badge large">大型库</span>';
+        head += "</div>";
+
+        let meta = '<div class="meta">';
+        meta += skills ? '<span class="sk">' + skills + " 个技能</span>" : "<span>技能数未知</span>";
+        if (upstream) meta += '<a href="https://github.com/' + esc(upstream) + '" target="_blank" rel="noopener">上游 ↗</a>';
+        meta += "</div>";
+
+        c.innerHTML = head + '<div class="note">' + esc(note) + "</div>" + meta;
+        c.querySelector("input").onchange = (e) => { toggle(repo, e.target.checked); };
+        c.appendChild(buildCardGuide(use, skip));
+        g.appendChild(c);
+    });
+
+    if (rows.length === 0)
+    {
+        const p = document.createElement("div");
+        p.className = "empty-tip";
+        p.textContent = "没有匹配的库，试试清空搜索或勾选「包含大型库」。";
+        g.appendChild(p);
+    }
+
+    document.getElementById("resCnt").innerHTML = "显示 <b>" + rows.length + "</b> / " + DATA.length;
+    renderSelTable();
     updateCnt();
 }
-function saveSel(){ localStorage.setItem("wl-sel", JSON.stringify([...sel])); }
-function updateCnt(){
-    document.getElementById("cnt").textContent = sel.size;
-    document.getElementById("fabCnt").textContent = sel.size;
-    document.getElementById("instCnt").textContent = instTotal();
+
+function toggle(repo, on)
+{
+    if (on) sel.add(repo); else sel.delete(repo);
+    localStorage.setItem("wl-sel", JSON.stringify(Array.from(sel)));
+    const card = Array.prototype.slice.call(document.querySelectorAll(".card")).filter((x) => x.dataset.repo === repo)[0];
+    if (card) card.classList.toggle("sel", on);
+    updateCnt();
     buildCmd();
 }
 
-// 平台 / 离线 / 大型库
-document.querySelectorAll("#seg button").forEach(b => b.onclick = () => {
-    document.querySelectorAll("#seg button").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on"); os = b.dataset.os; buildCmd();
-});
-document.getElementById("inclLarge").onchange = render;
-document.getElementById("offlineBtn").onclick = () => {
-    offline = !offline;
-    localStorage.setItem("wl-offline", offline ? "1" : "0");
-    applyOffline(); buildCmd();
-};
-function applyOffline(){
-    const btn = document.getElementById("offlineBtn");
-    btn.textContent = offline ? "离线模式：已开启" : "离线模式：未开启";
-    btn.classList.toggle("primary", !offline);
-    btn.classList.toggle("danger", offline);
-    document.getElementById("modeDot").classList.toggle("off", offline);
-    document.getElementById("modeText").textContent = offline
-        ? "离线模式：命令从本地压缩包 " + OFFLINE_ZIP + " 安装，全程不访问 GitHub"
-        : "在线模式：命令会从 GitHub 克隆技能仓";
+function updateCnt()
+{
+    document.getElementById("cnt").textContent = sel.size;
+    document.getElementById("fabCnt").textContent = sel.size;
+    document.getElementById("instCnt").textContent = DATA.filter((r) => installed(r[0])).length;
 }
-applyOffline();
 
-// 生成命令
-function depArgs(){
-    let args = "";
-    if (act === "install" || act === "uninstall") args += " --action " + act;
-    else args += " --action " + act;
-    const root = document.getElementById("root").value.trim();
-    if (sel.size === DATA.length) {
-        args = "--action " + act + " --all";
-    } else {
-        args += " --repo " + [...sel].join(",");
-    }
-    if (act === "install" && offline) args += " --offline ./" + OFFLINE_ZIP;
-    if (root) args += (os === "win" ? " -Root " : " --root ") + root;
-    return args;
+function applyView()
+{
+    document.getElementById("grid").style.display = view === "cards" ? "" : "none";
+    document.getElementById("tableWrap").style.display = view === "table" ? "" : "none";
+    Array.prototype.slice.call(document.querySelectorAll("#viewSeg button")).forEach((b) => {
+        b.classList.toggle("on", b.dataset.view === view);
+    });
+    render();
 }
-function buildCmd(){
+
+// ===== 底部命令生成 =====
+function depArgs(repos)
+{
+    const win = os === "win";
+    const root = document.getElementById("root").value.trim();
+    const a = [];
+    if (repos.length === DATA.length) a.push(win ? "-All" : "--all");
+    else a.push((win ? "-Repo " : "--repo ") + repos.join(","));
+    if (root) a.push((win ? "-Root " : "--root ") + root);
+    a.push(win ? "-NonInteractive" : "--non-interactive");
+    return a.join(" ");
+}
+
+function buildCmd()
+{
     const out = document.getElementById("cmdOut");
     const hint = document.getElementById("hint");
-    const repos = [...sel].join(",");
-    const root = document.getElementById("root").value.trim();
+    const win = os === "win";
+    const repos = Array.from(sel);
 
-    // 扫描命令独立生成
-    if (act === "scan") {
-        let s = os === "win"
-            ? "cd aukodeng-wife-legal-auto-download\ndeploy.cmd -Action scan -Json > scan.json"
-            : "cd aukodeng-wife-legal-auto-download\n./deploy.sh --action scan --json > scan.json";
-        s += "\n# 把输出的 JSON（或 scan.json 文件）粘贴回页面的「导入本地状态」";
-        if (root) s = s.replace(/(\-Action scan|\-\-action scan)/, "$1 " + (os==="win"?"-Root ":"--root ") + root);
-        out.textContent = s;
-        hint.textContent = "扫描本机已安装状态（默认路径或 -Root 指定路径）";
+    if (act === "scan")
+    {
+        hint.textContent = "扫描本机已安装技能";
+        out.textContent = win ? "deploy.cmd -Action scan -Json" : "./deploy.sh --action scan --json";
         return;
     }
-    if (sel.size===0) { out.textContent = "（尚未选择任何技能仓）"; return; }
+    if (repos.length === 0)
+    {
+        hint.textContent = "";
+        out.textContent = "（尚未选择任何技能仓）";
+        return;
+    }
 
-    const args = depArgs();
-    if (act === "uninstall") {
-        hint.textContent = "删除会移除技能库中的仓目录（执行时脚本会再次确认）";
-        out.textContent = os === "win"
-            ? "cd aukodeng-wife-legal-auto-download\ndeploy.cmd" + args
-            : "cd aukodeng-wife-legal-auto-download\n./deploy.sh" + args;
+    hint.textContent = act === "disable" ? "停用：从目标项目 .trae/skills 移除，技能库本身保留" : "已选 " + repos.length + " 个库";
+    const args = depArgs(repos);
+
+    if (act === "enable" || act === "disable")
+    {
+        // 启用 / 停用都作用在目标项目的 .trae/skills，只需仓库范围与项目路径
+        const base = (win ? "deploy.cmd -Action " + act + " " : "./deploy.sh --action " + act + " ") + args
+            + (win ? " -Project .." : " --project ..");
+        out.textContent = "# 在目标项目根目录执行（-Project 指向该目录；部署仓克隆在其下时用 ..）\n" + base;
         return;
     }
-    if (offline && act === "install") {
-        hint.textContent = "离线安装：先下载离线压缩包并放进部署仓目录，再执行";
-        out.textContent = "# 0.（联网机器一次性）下载离线压缩包，拷到本机部署仓目录：\n#    " + REPO_URL + "/releases/download/offline-bundle/" + OFFLINE_ZIP + "\n"
-            + (os === "win"
-                ? "cd aukodeng-wife-legal-auto-download\ndeploy.cmd" + args
-                : "cd aukodeng-wife-legal-auto-download\n./deploy.sh" + args);
-        return;
-    }
-    if (act === "enable") {
-        hint.textContent = "把已安装技能平铺到目标项目的 .trae/skills/ 下";
-        out.textContent = (os === "win"
-            ? "cd <你的项目目录>\ndeploy.cmd --action enable --repo " + repos + (root ? " -Root " + root : "")
-            : "cd <你的项目目录>\n./deploy.sh --action enable --repo " + repos + (root ? " --root " + root : ""));
-        return;
-    }
-    // 在线安装 / 更新
-    hint.textContent = os === "win" ? "Windows：在 cmd / PowerShell 中执行" : "macOS / Linux：在终端执行";
-    out.textContent = "# 1. 克隆部署仓（已有则跳过）\ngit clone " + REPO_URL + "\ncd aukodeng-wife-legal-auto-download\n\n# 2. " + (act==="update"?"更新":"安装") + "所选技能\n"
-        + (os === "win" ? "deploy.cmd" + args : "./deploy.sh" + args)
-        + "\n\n# 3. 在目标项目里启用\ncd <你的项目目录>\n"
-        + (os === "win" ? "<部署仓路径>\\deploy.cmd --action enable --repo " : "<部署仓路径>/deploy.sh --action enable --repo ") + repos;
+
+    const step1 = "# 1) 克隆部署仓（已克隆可跳过）\n" + "git clone " + REPO_URL + "\ncd aukodeng-wife-legal-auto-download";
+    const action = win ? "deploy.cmd -Action " + act + " " + args : "./deploy.sh --action " + act + " " + args;
+    out.textContent = step1 + "\n\n# 2) " + ({ install: "安装", update: "更新", uninstall: "删除" }[act] || act) + "\n" + action
+        + (act === "install" ? "\n\n# 3) 启用进目标项目（在项目根目录执行，部署仓在其下时用 ..）\n" + (win ? "deploy.cmd -Action enable " + args + " -Project .." : "./deploy.sh --action enable " + args + " --project ..") : "");
 }
-document.getElementById("root").oninput = buildCmd;
 
-// 动作切换
-document.querySelectorAll("#actSeg button").forEach(b => b.onclick = () => {
-    document.querySelectorAll("#actSeg button").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on"); act = b.dataset.act; buildCmd();
+// ===== 事件绑定 =====
+document.getElementById("q").oninput = (e) => { q = e.target.value; render(); };
+document.getElementById("inclLarge").onchange = () => render();
+
+Array.prototype.slice.call(document.querySelectorAll("#seg button")).forEach((b) => {
+    b.onclick = () => {
+        Array.prototype.slice.call(document.querySelectorAll("#seg button")).forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        os = b.dataset.os;
+        buildCmd();
+    };
 });
 
-// 状态导入弹层
-const modal = document.getElementById("scanModal");
-document.getElementById("scanBtn").onclick = () => {
-    modal.classList.add("open");
-    document.getElementById("scanCmdHint").textContent = os === "win"
-        ? "deploy.cmd -Action scan -Json"
-        : "./deploy.sh --action scan --json";
+Array.prototype.slice.call(document.querySelectorAll("#viewSeg button")).forEach((b) => {
+    b.onclick = () => { view = b.dataset.view; localStorage.setItem("wl-view", view); applyView(); };
+});
+
+Array.prototype.slice.call(document.querySelectorAll("#actSeg button")).forEach((b) => {
+    b.onclick = () => {
+        Array.prototype.slice.call(document.querySelectorAll("#actSeg button")).forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        act = b.dataset.act;
+        buildCmd();
+    };
+});
+
+document.getElementById("root").oninput = () => buildCmd();
+
+document.getElementById("fab").onclick = () => {
+    document.getElementById("cmdpanel").classList.add("open");
+    buildCmd();
 };
-document.getElementById("scanClose").onclick = () => modal.classList.remove("open");
-modal.onclick = (e) => { if (e.target === modal) modal.classList.remove("open"); };
+
+document.getElementById("copyBtn").onclick = (e) => {
+    const btn = e.currentTarget;
+    navigator.clipboard.writeText(document.getElementById("cmdOut").textContent).then(() => {
+        btn.textContent = "已复制";
+        btn.classList.add("ok");
+        toast("命令已复制");
+        setTimeout(() => { btn.textContent = "复制命令"; btn.classList.remove("ok"); }, 1800);
+    }).catch(() => toast("复制失败，请手动选中命令"));
+};
+
+document.getElementById("exportBtn").onclick = () => {
+    const payload = { type: "wife-legal-selection", createdAt: new Date().toISOString(), os: os, repos: Array.from(sel) };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "wife-legal-selection.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("已导出 wife-legal-selection.json");
+};
+
+// 状态导入弹层
+const scanModal = document.getElementById("scanModal");
+document.getElementById("scanBtn").onclick = () => {
+    document.getElementById("scanCmdHint").textContent = os === "win" ? "deploy.cmd -Action scan -Json" : "./deploy.sh --action scan --json";
+    scanModal.classList.add("open");
+};
+document.getElementById("scanClose").onclick = () => scanModal.classList.remove("open");
+scanModal.onclick = (e) => { if (e.target === scanModal) scanModal.classList.remove("open"); };
 document.getElementById("scanPick").onclick = () => document.getElementById("scanFile").click();
 document.getElementById("scanFile").onchange = (e) => {
-    const f = e.target.files[0]; if (!f) return;
+    const f = e.target.files[0];
+    if (!f) return;
     const rd = new FileReader();
     rd.onload = () => { document.getElementById("scanInput").value = rd.result; };
     rd.readAsText(f);
 };
 document.getElementById("scanImport").onclick = () => {
-    const txt = document.getElementById("scanInput").value.trim();
-    // 容错：截取第一段 JSON 对象（用户可能整段粘贴了终端输出）
-    const m = txt.match(/\{[\s\S]*\}/);
-    if (!m) { toast("没有解析到 JSON，请粘贴扫描输出"); return; }
-    let data;
-    try { data = JSON.parse(m[0]); } catch(err) { toast("JSON 解析失败：" + err.message); return; }
-    if (!data.repos) { toast("JSON 里没有 repos 字段，确认是 scan 输出"); return; }
-    scanState = data;
+    const t = document.getElementById("scanInput").value.trim();
+    if (!t) { toast("先粘贴扫描结果 JSON"); return; }
+    try { scanState = JSON.parse(t); }
+    catch (err) { toast("JSON 解析失败：" + err.message); return; }
     localStorage.setItem("wl-scan", JSON.stringify(scanState));
-    if (scanState.root && !document.getElementById("root").value.trim()) document.getElementById("root").value = scanState.root;
-    const info = document.getElementById("scanInfo");
-    info.textContent = "状态已导入：根目录 " + (scanState.root||"?") + " · " + instTotal() + " 个仓已安装";
-    modal.classList.remove("open");
+    scanModal.classList.remove("open");
+    const n = DATA.filter((r) => installed(r[0])).length;
+    document.getElementById("scanInfo").textContent = "已导入本地状态：识别到 " + n + " 个已安装技能库。";
     render();
-    toast("本地状态导入成功：" + instTotal() + " 个仓标记为已安装");
+    toast("本地状态已导入");
 };
 
-// 面板与复制
-const panel = document.getElementById("cmdpanel");
-document.getElementById("fab").onclick = () => { panel.classList.add("open"); buildCmd(); };
-document.getElementById("copyBtn").onclick = (e) => {
-    navigator.clipboard.writeText(document.getElementById("cmdOut").textContent).then(() => {
-        const b = e.target; b.textContent = "已复制 ✓"; b.classList.add("ok");
-        toast("命令已复制到剪贴板");
-        setTimeout(()=>{ b.textContent="复制命令"; b.classList.remove("ok"); }, 1800);
-    });
-};
+window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") document.getElementById("cmdpanel").classList.remove("open");
+});
 
-// 导出选择配置（供 WorkBuddy 导入）
-document.getElementById("exportBtn").onclick = () => {
-    const cfg = {
-        type: "wife-legal-skill-selection",
-        version: 2,
-        exportedAt: new Date().toISOString(),
-        org: "aukodeng-skill",
-        topic: "wife-legal",
-        os: os,
-        mode: offline ? "offline" : "online",
-        root: document.getElementById("root").value.trim() || (scanState && scanState.root) || null,
-        selected: [...sel].map(repo => {
-            const r = DATA.find(x => x[0]===repo);
-            return { repo: r[0], category: r[1], upstream: r[2], large: r[3], skills: r[4], installed: installed(repo) };
-        }),
-        installCommand: document.getElementById("cmdOut").textContent.split("\n").filter(l => /deploy\.(cmd|sh)/.test(l) && !l.startsWith("#"))[0] || null
-    };
-    const blob = new Blob([JSON.stringify(cfg, null, 2)], {type:"application/json"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "wife-legal-selection.json";
-    a.click(); URL.revokeObjectURL(a.href);
-    toast("配置已导出：wife-legal-selection.json");
-};
+window.addEventListener("scroll", () => {
+    document.getElementById("toolbar").classList.toggle("stuck", window.scrollY > 8);
+});
 
-function toast(msg){
-    const t = document.getElementById("toast");
-    t.textContent = msg; t.classList.add("show");
-    setTimeout(()=>t.classList.remove("show"), 2200);
-}
-
-render();
-if (scanState) document.getElementById("scanInfo").textContent = "状态已导入：根目录 " + (scanState.root||"?") + " · " + instTotal() + " 个仓已安装";
+// ===== 初始化 =====
+renderCats();
+applyView();
+buildCmd();
 </script>
 </body>
 </html>
