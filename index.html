@@ -18,6 +18,17 @@ header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6
 h1{font-size:24px;font-weight:700}
 header .tag{font-size:13px;color:var(--sub)}
 .sub{color:var(--sub);font-size:14px;margin-bottom:20px}
+/* 使用建议折叠区 */
+.guide{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0 18px;margin-bottom:16px;font-size:13px;color:var(--sub)}
+.guide summary{cursor:pointer;padding:12px 0;font-size:14px;color:var(--ink);font-weight:600;list-style:none}
+.guide summary::-webkit-details-marker{display:none}
+.guide summary::before{content:"\25B8\00a0";color:var(--brand)}
+.guide[open] summary::before{content:"\25BE\00a0"}
+.guide .body{padding:0 0 14px}
+.guide ul{margin:0;padding-left:20px}
+.guide li{margin-bottom:6px}
+.guide b{color:var(--ink)}
+.guide code{font-family:var(--mono);background:#f1f3f7;border-radius:4px;padding:1px 5px;font-size:12px;color:var(--ink)}
 /* 顶部控制区 */
 .controls{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:14px;position:sticky;top:12px;z-index:10;box-shadow:0 2px 10px rgba(28,36,48,.05)}
 .ctrl{display:flex;flex-direction:column;gap:4px}
@@ -103,6 +114,20 @@ pre{background:#0a0e15;border:1px solid #2a3140;border-radius:8px;padding:12px 1
         <span class="tag">aukodeng-skill / wife-legal · 34 仓 · 10 分类</span>
     </header>
     <p class="sub">勾选技能仓后生成「安装 / 更新 / 删除」命令；导入本地扫描状态可标记已安装；离线模式支持从离线压缩包部署，全程不通网。</p>
+
+    <details class="guide" open>
+        <summary>什么时候用这个管理台？</summary>
+        <div class="body">
+            <ul>
+                <li><b>只想先装 1–2 个技能库试水</b>：在下面按分类勾选，点「生成命令」，把命令粘到终端执行即可。</li>
+                <li><b>不确定本机装了什么</b>：点「导入本地状态」跑一次 <code>scan</code>，页面会按扫描结果标出「已安装」，避免重复安装。</li>
+                <li><b>要给内网或团队机器批量铺装</b>：先在联网机器下载离线压缩包，目标机切「离线模式」，命令改从压缩包安装，全程不访问 GitHub。</li>
+                <li><b>要清理或换库</b>：勾选要移除的仓，用「删除」命令；脚本执行时会二次确认，不会误删其他目录。</li>
+                <li><b>2 万+ 技能的超大库（如 legal-skills-open）</b>：默认不参与，确实需要再勾「包含大型库」，否则克隆和加载都会很慢。</li>
+                <li><b>只想一键装全部</b>：直接跑 <code>deploy.cmd</code> / <code>deploy.sh</code> 就行，这个页面不是必需品。</li>
+            </ul>
+        </div>
+    </details>
 
     <div class="controls">
         <div class="ctrl">
