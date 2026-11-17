@@ -4,6 +4,10 @@ rem 实际逻辑在 scripts\deploy-wife-legal-skills.ps1，本文件只负责找
 rem 用法示例：
 rem   deploy.cmd -Action list
 rem   deploy.cmd -Action install -Category 合同与商事
+rem   deploy.cmd -Action scan -Json        （扫描本地已安装状态，输出 JSON 给网页导入）
+rem   deploy.cmd -Action uninstall -Repo Legal-Skills-Chinese   （删除）
+rem   deploy.cmd -Action install -Offline .\wife-legal-offline-bundle.zip -Repo Legal-Skills-Chinese   （离线安装）
+rem   deploy.cmd -Action install -Config .\wife-legal-selection.json   （按网页导出配置安装）
 setlocal
 set "SCRIPT_DIR=%~dp0"
 set "PS1=%SCRIPT_DIR%scripts\deploy-wife-legal-skills.ps1"

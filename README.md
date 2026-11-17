@@ -5,7 +5,30 @@
 - **不写死仓名**：组织 `aukodeng-skill` 下任何打上 GitHub topic `wife-legal` 的仓库都会被自动发现并收录；
 - **可挑选**：按业务分类、按仓库名、全部（含/不含大型库）三种方式选择，不用整包安装；
 - **双平台**：Windows 与 macOS / Linux 使用同一套命令，入口脚本自动识别平台；
+- **在线 + 离线**：在线从 GitHub 克隆安装，断网环境用离线压缩包部署，同一套页面与脚本；
 - **按需启用**：技能可留在技能库里用 MCP 读取，也可平铺进项目的 `.trae/skills/` 交给 IDE 直接识别。
+
+## 技能管理台（网页）
+
+不用记命令，浏览器里完成「选择 → 安装 / 更新 / 删除 → 启用」全流程：
+
+- **在线版**：<https://aukodeng-skill.github.io/aukodeng-wife-legal-auto-download/>（GitHub Pages，点开即用）
+- **本地版**：clone 本仓后双击 [index.html](index.html)，断网也能打开（技能清单内嵌在页面里）
+- **离线部署**：页面右上角切「离线模式」，配合 [Release 里的离线压缩包](https://github.com/aukodeng-skill/aukodeng-wife-legal-auto-download/releases/tag/offline-bundle)（`wife-legal-offline-bundle.zip`，含全部 34 仓 + 页面本体），全程不访问 GitHub
+
+页面能力：
+
+1. 34 仓 / 10 分类可视化勾选，Windows 与 macOS 命令一键切换；
+2. 「导入本地状态」：粘贴扫描 JSON 后自动标记**已安装**仓库（勾选后可生成**更新 / 删除**命令）；
+3. 生成 `install` / `update` / `uninstall` / `enable` / `scan` 五类命令，复制即用；
+4. 「导出配置」：选择结果存为 `wife-legal-selection.json`，可用脚本 `--config` 参数直接执行。
+
+配套命令（扫描本机已安装状态，输出 JSON 给页面导入）：
+
+```bash
+./deploy.sh --action scan --json     # macOS / Linux
+.\deploy.cmd -Action scan -Json      # Windows
+```
 
 ## 平台支持
 
@@ -75,75 +98,22 @@
 
 > 仲裁目前没有独立专仓：相关能力落在 `cn-labor-law-skills`（劳动仲裁）、`worker-rights-cn`（仲裁流程）、`uae-offplan-dispute-skill`（房产争议与仲裁）、`cn-litigation-toolkit`（争议解决流程）中，归类时按业务场景而非文件类型划分。
 
-## 一键部署
+## 常用参数速查
 
-### 1. 看清单与分类
-
-```bash
-./deploy.sh --action list          # macOS / Linux
-.\deploy.cmd -Action list          # Windows
-```
-
-### 2. 选择并安装
-
-交互式（推荐首次使用，直接回车 = 全部但不含大型库）：
-
-```bash
-./deploy.sh --action install
-```
-
-非交互式，按分类选：
-
-```bash
-./deploy.sh --action install --category 合同与商事
-./deploy.sh --action install --category 合同与商事 --category 劳动与用工
-.\deploy.cmd -Action install -Category 合同与商事
-```
-
-按仓库选（可多个）：
-
-```bash
-./deploy.sh --action install --repo Legal-Skills-Chinese --repo cn-labor-law-skills
-.\deploy.cmd -Action install -Repo Legal-Skills-Chinese,cn-labor-law-skills
-```
-
-全部安装（大型库需显式放开）：
-
-```bash
-./deploy.sh --action install --all
-./deploy.sh --action install --all --include-large
-```
-
-### 3. 启用进项目
-
-把技能平铺到 `<项目>/.trae/skills/wife-legal-<仓库>-<技能>/`，Trae / Claude Code 只认一层目录，因此统一加前缀：
-
-```bash
-./deploy.sh --action enable --repo cn-labor-law-skills --project ~/work/case-2026
-.\deploy.cmd -Action enable -Repo cn-labor-law-skills -Project D:\work\case-2026
-```
-
-### 4. 停用 / 更新 / 状态
-
-```bash
-./deploy.sh --action disable --repo cn-labor-law-skills --project ~/work/case-2026
-./deploy.sh --action update
-./deploy.sh --action status
-```
-
-### 参数说明
+完整流程用网页生成命令即可；脚本直连时参考下表（两个平台参数等价，`--xxx` 对应 `-Xxx`）：
 
 | 参数 | 说明 |
 |------|------|
-| `--action` / `-Action` | `list` / `status` / `install` / `update` / `enable` / `disable`，默认 `install` |
-| `--repo` / `-Repo` | 指定仓库，可重复或逗号分隔 |
-| `--category` / `-Category` | 指定业务分类，可重复或逗号分隔 |
-| `--all` / `-All` | 全部仓库（仍不含大型库） |
-| `--include-large` / `-IncludeLarge` | 放开大型库（安装与启用都生效） |
-| `--root` / `-Root` | 技能库根目录：Windows 默认 `D:\Git\ai-skills\wife-legal`（无 D 盘则用户目录下 `Git\ai-skills\wife-legal`），macOS/Linux 默认 `~/Git/ai-skills/wife-legal` |
-| `--project` / `-Project` | 启用/停用的目标项目根，默认当前目录 |
-| `--non-interactive` / `-NonInteractive` | 跳过交互菜单 |
-| `--org` / `--topic` | 默认 `aukodeng-skill` / `wife-legal` |
+| `--action` | `list` / `status` / `scan` / `install` / `update` / `uninstall` / `enable` / `disable`，默认 `install` |
+| `--repo` | 指定仓库，可重复或逗号分隔 |
+| `--category` | 指定业务分类，可重复或逗号分隔 |
+| `--all` / `--include-large` | 全部仓库（仍不含大型库）/ 放开大型库 |
+| `--offline <zip>` | 离线安装：从本地压缩包解压，不访问 GitHub |
+| `--config <json>` | 读取网页导出的 `wife-legal-selection.json` 作为选择来源 |
+| `--json` | `scan` / `status` 输出 JSON（网页「导入本地状态」用） |
+| `--root` | 技能库根目录：Windows 默认 `D:\Git\ai-skills\wife-legal`（无 D 盘则用户目录下 `Git\ai-skills\wife-legal`），macOS/Linux 默认 `~/Git/ai-skills/wife-legal` |
+| `--project` | 启用/停用的目标项目根，默认当前目录 |
+| `--non-interactive` | 跳过交互菜单（`uninstall` 同时跳过删除确认） |
 
 ## 大型库保护
 
@@ -176,27 +146,12 @@ macOS / Linux 需要把路径改成 `"/Users/<你的用户名>/Git/ai-skills/wif
 ```
 deploy.sh                          # 跨平台入口（自动识别 Windows / macOS / Linux）
 deploy.cmd                         # Windows 入口
+index.html                         # 技能管理台网页（在线 Pages / 本地双击 / 离线部署同一份）
 scripts/deploy-wife-legal-skills.ps1   # PowerShell 实现
 scripts/deploy-wife-legal-skills.sh    # macOS / Linux bash 实现
+scripts/make-offline-bundle.sh     # 手动生成离线压缩包（兜底；线上以 Actions 自动发 Release 为准）
+.github/workflows/offline-bundle.yml   # 自动打离线包并更新 Release（tag: offline-bundle，每周自动刷新）
 catalog.tsv                        # 34 个仓库 × 10 个业务分类（两个平台的共用数据源）
 workbuddy-mcp.json                 # MCP filesystem 配置样例
 docs/法律技能一键部署与切换方案.md      # 完整方案、选型与分类明细
 ```
-
-## 与其他仓的分工
-
-| 仓 | topic | 可见性 | 用途 |
-|------|------|------|------|
-| `aukodeng-wife-legal-auto-download`（本仓） | `wife-legal` | Public | 法律技能唯一部署入口，34 仓 / 10 分类，可选装可选启用 |
-| `aukodeng-work-auto-download` | `aukodeng-work` | Private（需登录） | SDWAN 项目私有技能镜像，`-Action apply` 铺入开发项目 |
-
-两个仓各自独立部署，装哪个仓的脚本就只加载那个仓对应的技能，互不混杂。
-
-## 仓库收录规则
-
-1. 在 `aukodeng-skill` 组织下 fork（或新建）目标仓；
-2. 给仓库打上 topic `wife-legal`；
-3. 在 `catalog.tsv` 增加一行（仓库名、分类、上游地址、是否大型库、技能数、说明）；
-4. 提交后所有已部署环境执行 `--action update` 即可看到新仓。
-
-部署仓自身不打 `wife-legal` 标签，避免把自己当成技能仓收录。

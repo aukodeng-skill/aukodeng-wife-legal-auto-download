@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>律师技能管理台 · wife-legal</title>
+<style>
+:root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#1c2430; --sub:#6b7684;
+    --brand:#3b5bdb; --brand-ink:#fff; --line:#e3e7ee;
+    --ok:#2f9e44; --warn:#e8590c; --chip:#eef2ff; --danger:#c92a2a;
+    --mono:"Cascadia Code",Consolas,"JetBrains Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Segoe UI","Microsoft YaHei",-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding:32px 20px 110px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:24px;font-weight:700}
+header .tag{font-size:13px;color:var(--sub)}
+.sub{color:var(--sub);font-size:14px;margin-bottom:20px}
+/* 顶部控制区 */
+.controls{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:14px;position:sticky;top:12px;z-index:10;box-shadow:0 2px 10px rgba(28,36,48,.05)}
+.ctrl{display:flex;flex-direction:column;gap:4px}
+.ctrl label{font-size:12px;color:var(--sub)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{padding:6px 16px;border:0;background:#fff;font-size:13px;cursor:pointer;color:var(--sub)}
+.seg button.on{background:var(--brand);color:var(--brand-ink)}
+.ctrl input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;width:220px}
+.stats{margin-left:auto;font-size:13px;color:var(--sub);white-space:nowrap}
+.stats b{color:var(--ink);font-size:16px}
+.btn{padding:7px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;cursor:pointer;color:var(--ink)}
+.btn:hover{border-color:var(--brand);color:var(--brand)}
+.btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+.btn.danger{color:var(--danger);border-color:#ffc9c9}
+.link{font-size:13px;color:var(--brand);text-decoration:none}
+.link:hover{text-decoration:underline}
+/* 大型库开关 */
+.switch{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none}
+.switch input{width:16px;height:16px;accent-color:var(--warn)}
+/* 模式条 */
+.modebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:var(--sub)}
+.modebar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
+.modebar .dot.off{background:var(--warn)}
+/* 分类条 */
+.cats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.cat{padding:5px 14px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:13px;cursor:pointer;color:var(--sub)}
+.cat.on{background:var(--chip);border-color:var(--brand);color:var(--brand);font-weight:600}
+.cat .n{font-size:11px;opacity:.7;margin-left:4px}
+/* 仓库卡片 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;transition:box-shadow .15s,border-color .15s;position:relative}
+.card:hover{box-shadow:0 4px 14px rgba(28,36,48,.08)}
+.card.sel{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
+.card.installed{border-left:3px solid var(--ok)}
+.card .row1{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.card input[type=checkbox]{width:17px;height:17px;accent-color:var(--brand);flex:none;cursor:pointer}
+.card .name{font-weight:600;font-size:15px;font-family:var(--mono);word-break:break-all;flex:1}
+.badge{flex:none;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--brand)}
+.badge.large{background:#fff4e6;color:var(--warn)}
+.badge.inst{background:#e6fcf0;color:var(--ok);font-weight:600}
+.badge.enabled{background:#eef2ff;color:var(--brand)}
+.card .note{font-size:13px;color:var(--sub);margin:4px 0 8px;min-height:38px}
+.card .meta{display:flex;gap:14px;font-size:12px;color:var(--sub);align-items:center;flex-wrap:wrap}
+.card .meta .skills{color:var(--ok);font-weight:600}
+.card .meta a{color:var(--brand);text-decoration:none}
+.card .meta a:hover{text-decoration:underline}
+/* 状态导入弹层 */
+.modal{position:fixed;inset:0;background:rgba(18,22,31,.5);display:none;align-items:center;justify-content:center;z-index:80}
+.modal.open{display:flex}
+.modal .box{background:#fff;border-radius:12px;max-width:640px;width:92%;padding:20px 24px}
+.modal h3{font-size:16px;margin-bottom:6px}
+.modal p{font-size:13px;color:var(--sub);margin-bottom:10px}
+.modal pre{background:#0a0e15;color:#e8ecf3;border:1px solid #2a3140;border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:110px;margin-bottom:10px}
+.modal textarea{width:100%;height:140px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:12px;resize:vertical}
+.modal .acts{display:flex;gap:10px;margin-top:12px;justify-content:flex-end}
+/* 底部命令面板 */
+.cmdpanel{position:fixed;left:0;right:0;bottom:0;background:#12161f;color:#e8ecf3;border-top:1px solid #2a3140;transform:translateY(100%);transition:transform .25s;z-index:50}
+.cmdpanel.open{transform:translateY(0)}
+.cmdpanel .inner{max-width:1080px;margin:0 auto;padding:14px 20px 16px}
+.cmdhead{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.cmdhead .t{font-size:14px;font-weight:600}
+.cmdhead .hint{font-size:12px;color:#8b94a7}
+.cmdhead button{margin-left:auto;padding:6px 16px;border-radius:8px;border:0;cursor:pointer;font-size:13px}
+.acts2{display:flex;border:1px solid #2a3140;border-radius:8px;overflow:hidden}
+.acts2 button{padding:5px 14px;border:0;background:#1a2130;color:#8b94a7;font-size:12.5px;cursor:pointer}
+.acts2 button.on{background:var(--brand);color:#fff}
+.copy{background:var(--brand);color:#fff}
+.copy.ok{background:var(--ok)}
+.export{background:#2a3140;color:#e8ecf3;border:1px solid #3a4254}
+pre{background:#0a0e15;border:1px solid #2a3140;border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto}
+/* 悬浮球 */
+.fab{position:fixed;right:24px;bottom:24px;background:var(--brand);color:#fff;border-radius:999px;padding:12px 22px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(59,91,219,.4);z-index:40;border:0}
+.fab .cnt{background:#fff;color:var(--brand);border-radius:999px;padding:0 8px;margin-left:6px;font-size:12px}
+.toast{position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--ink);color:#fff;padding:8px 20px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;z-index:99;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:640px){.stats{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <h1>律师技能管理台</h1>
+        <span class="tag">aukodeng-skill / wife-legal · 34 仓 · 10 分类</span>
+    </header>
+    <p class="sub">勾选技能仓后生成「安装 / 更新 / 删除」命令；导入本地扫描状态可标记已安装；离线模式支持从离线压缩包部署，全程不通网。</p>
+
+    <div class="controls">
+        <div class="ctrl">
+            <label>目标平台</label>
+            <div class="seg" id="seg">
+                <button data-os="win" class="on">Windows</button>
+                <button data-os="mac">macOS / Linux</button>
+            </div>
+        </div>
+        <div class="ctrl">
+            <label>安装根目录（可选）</label>
+            <input type="text" id="root" placeholder="留空 = 脚本默认路径">
+        </div>
+        <label class="switch" title="large=1 的仓库技能数量巨大，默认不参与">
+            <input type="checkbox" id="inclLarge"> 包含大型库（2 万+ 技能）
+        </label>
+        <button class="btn" id="scanBtn">导入本地状态</button>
+        <button class="btn primary" id="offlineBtn">离线模式：未开启</button>
+        <div class="stats">已选 <b id="cnt">0</b> · 已安装 <b id="instCnt">0</b></div>
+    </div>
+
+    <div class="modebar" id="modebar">
+        <span><span class="dot" id="modeDot"></span><span id="modeText">在线模式：命令会从 GitHub 克隆技能仓</span></span>
+        <a class="link" id="bundleLink" target="_blank" rel="noopener" href="https://github.com/aukodeng-skill/aukodeng-wife-legal-auto-download/releases/tag/offline-bundle">下载离线压缩包 ↗</a>
+        <span style="margin-left:auto" id="scanInfo"></span>
+    </div>
+
+    <div class="cats" id="cats"></div>
+    <div class="grid" id="grid"></div>
+</div>
+
+<button class="fab" id="fab">生成命令<span class="cnt" id="fabCnt">0</span></button>
+<div class="cmdpanel" id="cmdpanel">
+    <div class="inner">
+        <div class="cmdhead">
+            <span class="t">部署命令</span>
+            <div class="acts2" id="actSeg">
+                <button data-act="install" class="on">安装</button>
+                <button data-act="update">更新</button>
+                <button data-act="uninstall">删除</button>
+                <button data-act="enable">启用进项目</button>
+                <button data-act="scan">扫描命令</button>
+            </div>
+            <span class="hint" id="hint"></span>
+            <button class="copy" id="copyBtn">复制命令</button>
+            <button class="export" id="exportBtn">导出配置</button>
+        </div>
+        <pre id="cmdOut">（尚未选择任何技能仓）</pre>
+    </div>
+</div>
+
+<!-- 状态导入弹层 -->
+<div class="modal" id="scanModal">
+    <div class="box">
+        <h3>导入本地已安装状态</h3>
+        <p>第 1 步：在部署仓目录运行扫描命令，得到一段 JSON：</p>
+        <pre id="scanCmdHint"></pre>
+        <p>第 2 步：把 JSON 原样粘贴到下面（或选择扫描导出的文件），点「导入状态」：</p>
+        <textarea id="scanInput" placeholder='{"type":"wife-legal-scan", ...}'></textarea>
+        <div class="acts">
+            <input type="file" id="scanFile" accept=".json,.txt" style="display:none">
+            <button class="btn" id="scanPick">选择文件…</button>
+            <button class="btn primary" id="scanImport">导入状态</button>
+            <button class="btn" id="scanClose">关闭</button>
+        </div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// catalog.tsv 数据（来源：aukodeng-wife-legal-auto-download main 分支）
+const DATA = [
+["Legal-Skills-Chinese","综合技能库","THUYRan/Legal-Skills-Chinese",0,76,"中文法律技能合集，覆盖合同、诉讼、合规等通用场景"],
+["legal-skills","综合技能库","pa1nrui1/legal-skills",0,2,"中文法律工作流（尽调、文书），含检索脚本"],
+["lawyerDU","综合技能库","law086com/lawyerDU",0,null,"律师实务技能与提示词合集"],
+["claude-for-legal","综合技能库","anthropics/claude-for-legal",0,null,"Anthropic 官方法律技能示例（英文，美国法）"],
+["legal-skills-1","综合技能库","cat-xierluo/legal-skills",0,72,"中文法律人技能集合，更新活跃"],
+["legal-skills-2","综合技能库","gfodor/legal-skills",0,3,"英文法律技能（合同、检索），GPL-3.0"],
+["lq-skills","综合技能库","LegalQuants/lq-skills",0,52,"面向律师与法律工程师的技能集合"],
+["mini-claude-for-legal","综合技能库","sboghossian/mini-claude-for-legal",1,982,"大型英文技能库（982 个 SKILL.md），默认不启用"],
+["legal-skills-open","综合技能库","ThomasMoreAI/legal-skills-open",1,20295,"超大法律技能库（2 万+ SKILL.md），默认不启用"],
+["awesome-legal-skills","综合技能库","lawve-ai/awesome-legal-skills",1,281,"法律技能索引与合集，默认不启用"],
+["ai-legal-claude","合同与商事","zubair-trabzada/ai-legal-claude",0,14,"合同审查、NDA、合规风险，1.8k star"],
+["claude-legal-skill","合同与商事","evolsb/claude-legal-skill",0,1,"基于 CUAD 数据集的合同条款审查"],
+["contract-copilot.skill","合同与商事","cat-xierluo/contract-copilot.skill",0,1,"中文合同起草与审查副驾"],
+["new-litigation-visualization","诉讼与争议解决","MiaoQichuan/new-litigation-visualization",0,8,"诉讼可视化与庭审表达（8 个模块）"],
+["cn-litigation-toolkit","诉讼与争议解决","Youchu-lawhub/cn-litigation-toolkit",0,23,"中国诉讼工具箱（立案、证据、庭审）"],
+["china-lawyer-analyst","诉讼与争议解决","CSlawyer1985/china-lawyer-analyst",0,1,"中国律师案件分析与策略"],
+["uae-offplan-dispute-skill","诉讼与争议解决","qgardens2buyer/uae-offplan-dispute-skill",0,1,"UAE 期房买卖争议与仲裁要点"],
+["legal-research-skill","法律检索与类案","Golden2002/legal-research-skill",0,2,"法律检索流程与引证规范"],
+["cn-law-hub","法律检索与类案","ZongziForu/cn-law-hub",0,1,"中国法条检索与法源定位"],
+["china-law-case-analysis-skills","法律检索与类案","wesky820/china-law-case-analysis-skills",0,1,"类案检索与裁判要旨分析"],
+["dingduff-public","法律检索与类案","DingDuff/dingduff-public",0,5,"检索技能与 Claude 插件"],
+["cn-labor-law-skills","劳动与用工","peter111999/cn-labor-law-skills",0,17,"中国劳动法：入职、解除、竞业、劳动仲裁"],
+["worker-rights-cn","劳动与用工","90le/worker-rights-cn",0,11,"劳动者维权：加班费、工伤、仲裁流程"],
+["family-lawyer-skills","婚姻家事","yiyanli123/family-lawyer-skills",0,2,"婚姻家事：离婚、财产分割、抚养权"],
+["Claude-Patent-Creator","知识产权","RobThePCGuy/Claude-Patent-Creator",0,17,"美国专利撰写与 USPTO 流程"],
+["cn-patent-drafter","知识产权","handsomeZR-netizen/cn-patent-drafter",0,1,"中国专利撰写"],
+["patent-skills","知识产权","Obviously-Not/patent-skills",0,4,"专利检索、撰写与审查意见答复"],
+["Claude-Skills-Governance-Risk-and-Compliance","合规与企业法务","Sushegaad/Claude-Skills-Governance-Risk-and-Compliance",0,36,"GRC：治理、风险、合规（1k star）"],
+["SOE-Legal-Checker","合规与企业法务","HsuanZhao/SOE-Legal-Checker",0,1,"国企合规与法律审核"],
+["qulv-china-legal-counsel-skill","合规与企业法务","Daknniel-0881/qulv-china-legal-counsel-skill",0,1,"企业法律顾问日常（合同、用印、纠纷）"],
+["legal-document-assistant","法律文书与翻译","fayayy888/legal-document-assistant",0,7,"法律文书起草与校对"],
+["Chinese-English-Legal-Translation-Skill","法律文书与翻译","StefanCHEN2026/Chinese-English-Legal-Translation-Skill",0,1,"中英法律翻译术语与句式"],
+["AI-Skills-German-Law","域外法","borghei/AI-Skills-German-Law",0,319,"德国法技能库（319 个 SKILL.md）"],
+["commercial-legal-pl","域外法","apiotrowski-afk/commercial-legal-pl",0,10,"波兰商事法（英文/波兰文）"],
+];
+
+const REPO_URL = "https://github.com/aukodeng-skill/aukodeng-wife-legal-auto-download";
+const OFFLINE_ZIP = "wife-legal-offline-bundle.zip";
+let os = "win", cat = "全部", act = "install", sel = new Set();
+let offline = false;
+let scanState = null;   // 导入的本地扫描状态：{root, project, repos:{repo:{installed,enabled,head}}}
+try { const s = localStorage.getItem("wl-sel"); if (s) sel = new Set(JSON.parse(s)); } catch(e) {}
+try { const s = localStorage.getItem("wl-offline"); if (s) offline = s === "1"; } catch(e) {}
+try { const s = localStorage.getItem("wl-scan"); if (s) scanState = JSON.parse(s); } catch(e) {}
+
+function installed(repo){ return !!(scanState && scanState.repos && scanState.repos[repo] && scanState.repos[repo].installed); }
+function enabledCount(repo){ return (scanState && scanState.repos && scanState.repos[repo] && scanState.repos[repo].enabled) || 0; }
+function instTotal(){ return DATA.filter(r=>installed(r[0])).length; }
+
+// 分类条
+const catCounts = {};
+DATA.forEach(r => catCounts[r[1]] = (catCounts[r[1]]||0)+1);
+const catsEl = document.getElementById("cats");
+[["全部", DATA.length], ...Object.entries(catCounts)].forEach(([name,n]) => {
+    const b = document.createElement("div");
+    b.className = "cat" + (name===cat ? " on":"");
+    b.innerHTML = name + '<span class="n">'+n+'</span>';
+    b.onclick = () => { cat = name; document.querySelectorAll(".cat").forEach(x=>x.classList.remove("on")); b.classList.add("on"); render(); };
+    catsEl.appendChild(b);
+});
+
+// 卡片
+const grid = document.getElementById("grid");
+function render() {
+    grid.innerHTML = "";
+    const inclLarge = document.getElementById("inclLarge").checked;
+    DATA.forEach((r) => {
+        const [repo, category, upstream, large, skills, note] = r;
+        if (cat!=="全部" && category!==cat) return;
+        if (large && !inclLarge) return;
+        const inst = installed(repo), en = enabledCount(repo);
+        const c = document.createElement("div");
+        c.className = "card" + (sel.has(repo) ? " sel" : "") + (inst ? " installed" : "");
+        c.innerHTML = '<div class="row1">'
+            + '<input type="checkbox" '+(sel.has(repo)?"checked":"")+' aria-label="选择 '+repo+'">'
+            + '<span class="name">'+repo+'</span>'
+            + (large ? '<span class="badge large">大型库</span>' : '<span class="badge">'+category+'</span>')
+            + (inst ? '<span class="badge inst">已安装</span>' : '')
+            + (en ? '<span class="badge enabled">已启用 '+en+'</span>' : '')
+            + '</div>'
+            + '<div class="note">'+note+'</div>'
+            + '<div class="meta">'
+            + '<span class="skills">'+(skills==null?"—":skills)+' 个技能</span>'
+            + '<a href="https://github.com/'+upstream+'" target="_blank" rel="noopener">上游 ↗</a>'
+            + '</div>';
+        c.querySelector("input").onchange = (e) => {
+            e.target.checked ? sel.add(repo) : sel.delete(repo);
+            saveSel(); c.classList.toggle("sel", e.target.checked); updateCnt();
+        };
+        grid.appendChild(c);
+    });
+    updateCnt();
+}
+function saveSel(){ localStorage.setItem("wl-sel", JSON.stringify([...sel])); }
+function updateCnt(){
+    document.getElementById("cnt").textContent = sel.size;
+    document.getElementById("fabCnt").textContent = sel.size;
+    document.getElementById("instCnt").textContent = instTotal();
+    buildCmd();
+}
+
+// 平台 / 离线 / 大型库
+document.querySelectorAll("#seg button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#seg button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); os = b.dataset.os; buildCmd();
+});
+document.getElementById("inclLarge").onchange = render;
+document.getElementById("offlineBtn").onclick = () => {
+    offline = !offline;
+    localStorage.setItem("wl-offline", offline ? "1" : "0");
+    applyOffline(); buildCmd();
+};
+function applyOffline(){
+    const btn = document.getElementById("offlineBtn");
+    btn.textContent = offline ? "离线模式：已开启" : "离线模式：未开启";
+    btn.classList.toggle("primary", !offline);
+    btn.classList.toggle("danger", offline);
+    document.getElementById("modeDot").classList.toggle("off", offline);
+    document.getElementById("modeText").textContent = offline
+        ? "离线模式：命令从本地压缩包 " + OFFLINE_ZIP + " 安装，全程不访问 GitHub"
+        : "在线模式：命令会从 GitHub 克隆技能仓";
+}
+applyOffline();
+
+// 生成命令
+function depArgs(){
+    let args = "";
+    if (act === "install" || act === "uninstall") args += " --action " + act;
+    else args += " --action " + act;
+    const root = document.getElementById("root").value.trim();
+    if (sel.size === DATA.length) {
+        args = "--action " + act + " --all";
+    } else {
+        args += " --repo " + [...sel].join(",");
+    }
+    if (act === "install" && offline) args += " --offline ./" + OFFLINE_ZIP;
+    if (root) args += (os === "win" ? " -Root " : " --root ") + root;
+    return args;
+}
+function buildCmd(){
+    const out = document.getElementById("cmdOut");
+    const hint = document.getElementById("hint");
+    const repos = [...sel].join(",");
+    const root = document.getElementById("root").value.trim();
+
+    // 扫描命令独立生成
+    if (act === "scan") {
+        let s = os === "win"
+            ? "cd aukodeng-wife-legal-auto-download\ndeploy.cmd -Action scan -Json > scan.json"
+            : "cd aukodeng-wife-legal-auto-download\n./deploy.sh --action scan --json > scan.json";
+        s += "\n# 把输出的 JSON（或 scan.json 文件）粘贴回页面的「导入本地状态」";
+        if (root) s = s.replace(/(\-Action scan|\-\-action scan)/, "$1 " + (os==="win"?"-Root ":"--root ") + root);
+        out.textContent = s;
+        hint.textContent = "扫描本机已安装状态（默认路径或 -Root 指定路径）";
+        return;
+    }
+    if (sel.size===0) { out.textContent = "（尚未选择任何技能仓）"; return; }
+
+    const args = depArgs();
+    if (act === "uninstall") {
+        hint.textContent = "删除会移除技能库中的仓目录（执行时脚本会再次确认）";
+        out.textContent = os === "win"
+            ? "cd aukodeng-wife-legal-auto-download\ndeploy.cmd" + args
+            : "cd aukodeng-wife-legal-auto-download\n./deploy.sh" + args;
+        return;
+    }
+    if (offline && act === "install") {
+        hint.textContent = "离线安装：先下载离线压缩包并放进部署仓目录，再执行";
+        out.textContent = "# 0.（联网机器一次性）下载离线压缩包，拷到本机部署仓目录：\n#    " + REPO_URL + "/releases/download/offline-bundle/" + OFFLINE_ZIP + "\n"
+            + (os === "win"
+                ? "cd aukodeng-wife-legal-auto-download\ndeploy.cmd" + args
+                : "cd aukodeng-wife-legal-auto-download\n./deploy.sh" + args);
+        return;
+    }
+    if (act === "enable") {
+        hint.textContent = "把已安装技能平铺到目标项目的 .trae/skills/ 下";
+        out.textContent = (os === "win"
+            ? "cd <你的项目目录>\ndeploy.cmd --action enable --repo " + repos + (root ? " -Root " + root : "")
+            : "cd <你的项目目录>\n./deploy.sh --action enable --repo " + repos + (root ? " --root " + root : ""));
+        return;
+    }
+    // 在线安装 / 更新
+    hint.textContent = os === "win" ? "Windows：在 cmd / PowerShell 中执行" : "macOS / Linux：在终端执行";
+    out.textContent = "# 1. 克隆部署仓（已有则跳过）\ngit clone " + REPO_URL + "\ncd aukodeng-wife-legal-auto-download\n\n# 2. " + (act==="update"?"更新":"安装") + "所选技能\n"
+        + (os === "win" ? "deploy.cmd" + args : "./deploy.sh" + args)
+        + "\n\n# 3. 在目标项目里启用\ncd <你的项目目录>\n"
+        + (os === "win" ? "<部署仓路径>\\deploy.cmd --action enable --repo " : "<部署仓路径>/deploy.sh --action enable --repo ") + repos;
+}
+document.getElementById("root").oninput = buildCmd;
+
+// 动作切换
+document.querySelectorAll("#actSeg button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#actSeg button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); act = b.dataset.act; buildCmd();
+});
+
+// 状态导入弹层
+const modal = document.getElementById("scanModal");
+document.getElementById("scanBtn").onclick = () => {
+    modal.classList.add("open");
+    document.getElementById("scanCmdHint").textContent = os === "win"
+        ? "deploy.cmd -Action scan -Json"
+        : "./deploy.sh --action scan --json";
+};
+document.getElementById("scanClose").onclick = () => modal.classList.remove("open");
+modal.onclick = (e) => { if (e.target === modal) modal.classList.remove("open"); };
+document.getElementById("scanPick").onclick = () => document.getElementById("scanFile").click();
+document.getElementById("scanFile").onchange = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { document.getElementById("scanInput").value = rd.result; };
+    rd.readAsText(f);
+};
+document.getElementById("scanImport").onclick = () => {
+    const txt = document.getElementById("scanInput").value.trim();
+    // 容错：截取第一段 JSON 对象（用户可能整段粘贴了终端输出）
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) { toast("没有解析到 JSON，请粘贴扫描输出"); return; }
+    let data;
+    try { data = JSON.parse(m[0]); } catch(err) { toast("JSON 解析失败：" + err.message); return; }
+    if (!data.repos) { toast("JSON 里没有 repos 字段，确认是 scan 输出"); return; }
+    scanState = data;
+    localStorage.setItem("wl-scan", JSON.stringify(scanState));
+    if (scanState.root && !document.getElementById("root").value.trim()) document.getElementById("root").value = scanState.root;
+    const info = document.getElementById("scanInfo");
+    info.textContent = "状态已导入：根目录 " + (scanState.root||"?") + " · " + instTotal() + " 个仓已安装";
+    modal.classList.remove("open");
+    render();
+    toast("本地状态导入成功：" + instTotal() + " 个仓标记为已安装");
+};
+
+// 面板与复制
+const panel = document.getElementById("cmdpanel");
+document.getElementById("fab").onclick = () => { panel.classList.add("open"); buildCmd(); };
+document.getElementById("copyBtn").onclick = (e) => {
+    navigator.clipboard.writeText(document.getElementById("cmdOut").textContent).then(() => {
+        const b = e.target; b.textContent = "已复制 ✓"; b.classList.add("ok");
+        toast("命令已复制到剪贴板");
+        setTimeout(()=>{ b.textContent="复制命令"; b.classList.remove("ok"); }, 1800);
+    });
+};
+
+// 导出选择配置（供 WorkBuddy 导入）
+document.getElementById("exportBtn").onclick = () => {
+    const cfg = {
+        type: "wife-legal-skill-selection",
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        org: "aukodeng-skill",
+        topic: "wife-legal",
+        os: os,
+        mode: offline ? "offline" : "online",
+        root: document.getElementById("root").value.trim() || (scanState && scanState.root) || null,
+        selected: [...sel].map(repo => {
+            const r = DATA.find(x => x[0]===repo);
+            return { repo: r[0], category: r[1], upstream: r[2], large: r[3], skills: r[4], installed: installed(repo) };
+        }),
+        installCommand: document.getElementById("cmdOut").textContent.split("\n").filter(l => /deploy\.(cmd|sh)/.test(l) && !l.startsWith("#"))[0] || null
+    };
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "wife-legal-selection.json";
+    a.click(); URL.revokeObjectURL(a.href);
+    toast("配置已导出：wife-legal-selection.json");
+};
+
+function toast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"), 2200);
+}
+
+render();
+if (scanState) document.getElementById("scanInfo").textContent = "状态已导入：根目录 " + (scanState.root||"?") + " · " + instTotal() + " 个仓已安装";
+</script>
+</body>
+</html>

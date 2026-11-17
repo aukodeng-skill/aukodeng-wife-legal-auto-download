@@ -1,0 +1,51 @@
+name: 生成离线压缩包
+
+# 离线部署用：把 catalog.tsv 登记的全部技能仓打成一个 zip 发到 Release（tag: offline-bundle）
+# - 手动触发（workflow_dispatch）为主，每周一 03:00 UTC 兜底自动刷新
+# - 大型库（large=1）也一并打入：离线包的意义就是不通网时什么都能装
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出部署仓
+        uses: actions/checkout@v4
+
+      - name: 克隆全部技能仓
+        run: |
+          mkdir -p bundle
+          cp catalog.tsv index.html bundle/
+          # 跳过表头逐行取第一列（仓库名）
+          tail -n +2 catalog.tsv | cut -f1 | while read -r repo; do
+            [ -z "$repo" ] && continue
+            echo "克隆：$repo"
+            git clone --depth 1 "https://github.com/aukodeng-skill/${repo}.git" "bundle/$repo"
+            rm -rf "bundle/$repo/.git"
+          done
+
+      - name: 打包
+        run: |
+          cd bundle
+          zip -q -r -X ../wife-legal-offline-bundle.zip .
+          cd ..
+          ls -lh wife-legal-offline-bundle.zip
+
+      - name: 发布到 Release（offline-bundle）
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: offline-bundle
+          name: 离线压缩包 wife-legal-offline-bundle
+          body: |
+            全量离线压缩包：catalog.tsv 登记的全部技能仓 + index.html 页面。
+            断网机器下载本 zip 后，配合部署仓脚本离线安装：
+            ./deploy.sh --action install --offline ./wife-legal-offline-bundle.zip
+            （Windows: deploy.cmd -Action install -Offline .\wife-legal-offline-bundle.zip）
+          files: wife-legal-offline-bundle.zip
+          make_latest: false

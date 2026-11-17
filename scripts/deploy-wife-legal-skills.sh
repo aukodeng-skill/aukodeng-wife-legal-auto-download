@@ -16,6 +16,9 @@ CATEGORIES=()
 ALL=0
 INCLUDE_LARGE=0
 NON_INTERACTIVE=0
+OFFLINE=""
+CONFIG=""
+JSON=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -26,13 +29,16 @@ usage()
     cat <<'EOF'
 用法：deploy-wife-legal-skills.sh [选项]
 
-  --action <list|status|install|update|enable|disable>  默认 install
+  --action <list|status|scan|install|update|uninstall|enable|disable>  默认 install
   --repo <名称>        指定仓库，可重复或逗号分隔
   --category <分类>    指定业务分类，可重复或逗号分隔
   --all                全部仓库（仍不含大型库）
   --include-large      放开大型库（安装与启用都生效）
+  --offline <zip>      离线压缩包：install 时从本地压缩包解压安装，不访问 GitHub
+  --config <json>      选择配置：读取网页导出的 wife-legal-selection.json 作为选择来源
   --root <目录>        技能库根目录，默认 ~/Git/ai-skills/wife-legal
   --project <目录>     目标项目根目录（enable/disable 作用位置），默认当前目录
+  --json               scan/status 输出 JSON（网页「导入本地状态」用）
   --org <组织>         默认 aukodeng-skill
   --topic <标签>       默认 wife-legal
   --non-interactive    不做交互菜单（使用默认全选或显式参数）
@@ -55,6 +61,9 @@ do
         --all|-All)              ALL=1; shift ;;
         --include-large|-IncludeLarge) INCLUDE_LARGE=1; shift ;;
         --non-interactive|-NonInteractive) NON_INTERACTIVE=1; shift ;;
+        --offline|-Offline)      OFFLINE="${2:-}"; shift 2 ;;
+        --config|-Config)        CONFIG="${2:-}"; shift 2 ;;
+        --json|-Json)            JSON=1; shift ;;
         -h|--help)               usage; exit 0 ;;
         *) echo "未知参数：$1" >&2; usage; exit 2 ;;
     esac
@@ -347,6 +356,40 @@ show_catalog()
 invoke_install()
 {
     mkdir -p "$ROOT"
+
+    # 离线模式：从压缩包解压安装，不访问 GitHub（压缩包内为各仓顶层目录）
+    if [ -n "$OFFLINE" ]
+    then
+        if [ ! -f "$OFFLINE" ]
+        then
+            echo "离线压缩包不存在：$OFFLINE（先从 Release 下载并放到部署仓目录）" >&2
+            exit 1
+        fi
+        local tmp
+        tmp="$(mktemp -d "${TMPDIR:-/tmp}/wife-legal-offline.XXXXXX")"
+        unzip -q -o "$OFFLINE" -d "$tmp" || { echo "解压失败：$OFFLINE" >&2; rm -rf "$tmp"; exit 1; }
+        local idx src dest
+        for idx in "${SELECTED[@]}"
+        do
+            src="$tmp/${C_REPO[$idx]}"
+            dest="$ROOT/${C_REPO[$idx]}"
+            if [ ! -d "$src" ]
+            then
+                echo "离线包中没有仓库：${C_REPO[$idx]}" >&2
+                continue
+            fi
+            if [ -d "$dest" ]
+            then
+                echo "跳过（已存在）：${C_REPO[$idx]}"
+                continue
+            fi
+            mv "$src" "$dest"
+            echo "离线安装：${C_REPO[$idx]}"
+        done
+        rm -rf "$tmp"
+        return 0
+    fi
+
     local idx dest
     for idx in "${SELECTED[@]}"
     do
@@ -467,7 +510,123 @@ show_status()
     done
 }
 
+# 删除技能库中已安装的仓（uninstall；只删技能库目录，启用目录用 disable 单独清理）
+invoke_uninstall()
+{
+    local idx existing="" dest
+    for idx in "${SELECTED[@]}"
+    do
+        dest="$ROOT/${C_REPO[$idx]}"
+        [ -d "$dest" ] && existing="$existing$idx "
+    done
+    if [ -z "${existing// /}" ]
+    then
+        echo "所选仓库均未安装，无需删除"
+        return 0
+    fi
+
+    # 交互确认（--non-interactive 跳过，便于脚本调用）
+    if [ "$NON_INTERACTIVE" -ne 1 ]
+    then
+        echo "将删除以下仓库（位于 $ROOT）："
+        for idx in $existing
+        do
+            echo "  - ${C_REPO[$idx]}"
+        done
+        printf '确认删除？输入 y 确认：'
+        local answer=""
+        read -r answer || answer=""
+        case "$answer" in
+            y|Y) ;;
+            *) echo "已取消删除"; return 0 ;;
+        esac
+    fi
+
+    for idx in $existing
+    do
+        rm -rf "$ROOT/${C_REPO[$idx]}"
+        echo "已删除：${C_REPO[$idx]}"
+    done
+}
+
+# 扫描本地安装状态；--json 时输出网页可导入的 JSON
+show_scan()
+{
+    local skills_root="$PROJECT/.trae/skills"
+    if [ "$JSON" -eq 1 ]
+    then
+        # JSON 手工拼装（bash 3.2 无 jq 依赖）
+        printf '{\n'
+        printf '  "type": "wife-legal-scan",\n'
+        printf '  "version": 1,\n'
+        printf '  "scannedAt": "%s",\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '  "root": "%s",\n' "$ROOT"
+        printf '  "project": "%s",\n' "$PROJECT"
+        printf '  "repos": [\n'
+        local i first=1 head enabled is_installed
+        for ((i = 0; i < CATALOG_COUNT; i++))
+        do
+            if [ -d "$ROOT/${C_REPO[$i]}" ]
+            then
+                is_installed="true"
+                head=""
+                [ -d "$ROOT/${C_REPO[$i]}/.git" ] && head="$(git -C "$ROOT/${C_REPO[$i]}" rev-parse --short HEAD 2>/dev/null || true)"
+            else
+                is_installed="false"
+                head=""
+            fi
+            enabled=0
+            [ -d "$skills_root" ] && enabled="$(find "$skills_root" -maxdepth 1 -type d -name "wife-legal-${C_REPO[$i]}-*" 2>/dev/null | wc -l | tr -d ' ')"
+            [ "$first" -eq 0 ] && printf ',\n'
+            first=0
+            printf '    {"repo": "%s", "category": "%s", "large": %s, "installed": %s, "enabled": %s, "head": %s}' \
+                "${C_REPO[$i]}" "${C_CAT[$i]}" "${C_LARGE[$i]}" "$is_installed" "$enabled" "${head:+\"$head\"}${head:-null}"
+        done
+        printf '\n  ]\n}\n'
+        return 0
+    fi
+    show_status
+}
+
 # ---------- 主流程 ----------
+
+# 读取网页导出的选择配置（--config）：仓库清单并入选择，root / org / topic / offline 可一并接管
+if [ -n "$CONFIG" ]
+then
+    if [ ! -f "$CONFIG" ]
+    then
+        echo "配置文件不存在：$CONFIG" >&2
+        exit 1
+    fi
+    # bash 3.2 无 jq 依赖：按行抽取 "repo": "xxx" 字段（网页导出格式固定，每仓一行）
+    cfg_count=0
+    while IFS= read -r line
+    do
+        name="$(printf '%s' "$line" | sed -n 's/.*"repo"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+        [ -z "$name" ] && continue
+        if [ ${#REPOS[@]} -eq 0 ]
+        then
+            REPOS+=("$name")
+        fi
+        cfg_count=$((cfg_count + 1))
+    done < "$CONFIG"
+    if [ "$cfg_count" -eq 0 ]
+    then
+        echo "配置文件里没有 repo 字段，确认是网页导出的 wife-legal-selection.json" >&2
+        exit 1
+    fi
+    echo "已从配置读取 $cfg_count 个仓库选择（$CONFIG）"
+    [ -z "$ROOT" ] && ROOT="$(sed -n 's/.*"root"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG" | head -n 1)"
+    cfg_org="$(sed -n 's/.*"org"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG" | head -n 1)"
+    [ -n "$cfg_org" ] && ORG="$cfg_org"
+    cfg_topic="$(sed -n 's/.*"topic"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG" | head -n 1)"
+    [ -n "$cfg_topic" ] && TOPIC="$cfg_topic"
+    if [ -z "$OFFLINE" ] && grep -q '"mode"[[:space:]]*:[[:space:]]*"offline"' "$CONFIG"
+    then
+        OFFLINE="$REPO_ROOT/wife-legal-offline-bundle.zip"
+    fi
+fi
+
 if discover_repos
 then
     missing=""
@@ -491,9 +650,17 @@ case "$ACTION" in
         echo "技能库根目录：$ROOT"
         ;;
     status)
-        show_status
+        if [ "$JSON" -eq 1 ]
+        then
+            show_scan
+        else
+            show_status
+        fi
         ;;
-    install|update|enable|disable)
+    scan)
+        show_scan
+        ;;
+    install|update|uninstall|enable|disable)
         resolve_targets
         if [ ${#SELECTED[@]} -eq 0 ]
         then
@@ -505,10 +672,11 @@ case "$ACTION" in
         echo "目标项目：$PROJECT"
         echo ""
         case "$ACTION" in
-            install) invoke_install ;;
-            update)  invoke_update ;;
-            enable)  invoke_enable ;;
-            disable) invoke_disable ;;
+            install)   invoke_install ;;
+            update)    invoke_update ;;
+            uninstall) invoke_uninstall ;;
+            enable)    invoke_enable ;;
+            disable)   invoke_disable ;;
         esac
         ;;
     *)

@@ -15,7 +15,7 @@
     .\scripts\deploy-wife-legal-skills.ps1 -Action enable -Repo Legal-Skills-Chinese -Project D:\Git\my-project
 #>
 param(
-    [ValidateSet('list','status','install','update','enable','disable')]
+    [ValidateSet('list','status','scan','install','update','uninstall','enable','disable')]
     [string]$Action = 'install',
 
     [string]$Org = 'aukodeng-skill',
@@ -32,11 +32,20 @@ param(
     [switch]$All,
     [switch]$IncludeLarge,
 
+    # 离线压缩包路径：install 时从压缩包解压安装，不访问 GitHub
+    [string]$Offline = '',
+
+    # 选择配置 JSON 路径：读取网页导出的 wife-legal-selection.json 作为选择来源
+    [string]$Config = '',
+
     # 不走交互菜单（参数已足够时自动生效）
     [switch]$NonInteractive,
 
     # 允许覆盖已存在的目标技能目录（enable 默认覆盖，保留开关便于脚本调用）
     [switch]$Force,
+
+    # scan/status 输出 JSON（网页「导入本地状态」用）
+    [switch]$Json,
 
     # 显示帮助（deploy.sh 转调 -h/--help 时使用）
     [switch]$Help
@@ -52,13 +61,16 @@ if ($Help)
     @'
 用法：deploy-wife-legal-skills.ps1 [参数]
 
-  -Action <list|status|install|update|enable|disable>  默认 install
+  -Action <list|status|scan|install|update|uninstall|enable|disable>  默认 install
   -Repo <名称>        指定仓库，可重复或逗号分隔
   -Category <分类>    指定业务分类，可重复或逗号分隔
   -All                全部仓库（仍不含大型库）
   -IncludeLarge       放开大型库（安装与启用都生效）
+  -Offline <zip>      离线压缩包：install 时从本地压缩包解压安装，不访问 GitHub
+  -Config <json>      选择配置：读取网页导出的 wife-legal-selection.json 作为选择来源
   -Root <目录>        技能库根目录，默认 D:\Git\ai-skills\wife-legal
   -Project <目录>     目标项目根目录（enable/disable 作用位置），默认当前目录
+  -Json               scan/status 输出 JSON（网页「导入本地状态」用）
   -Org <组织>         默认 aukodeng-skill
   -Topic <标签>       默认 wife-legal
   -NonInteractive     不做交互菜单（使用默认全选或显式参数）
@@ -290,6 +302,43 @@ function Invoke-Install
     {
         New-Item -ItemType Directory -Force -Path $Root | Out-Null
     }
+
+    # 离线模式：从压缩包解压安装，不访问 GitHub（压缩包内为各仓顶层目录）
+    if ($Offline)
+    {
+        if (-not (Test-Path $Offline))
+        {
+            throw "离线压缩包不存在：$Offline（先从 Release 下载并放到部署仓目录）"
+        }
+        $tmp = Join-Path ([IO.Path]::GetTempPath()) ("wife-legal-offline-" + [GUID]::NewGuid().ToString('N'))
+        try
+        {
+            Expand-Archive -Path $Offline -DestinationPath $tmp -Force
+            foreach ($row in $Targets)
+            {
+                $srcDir = Join-Path $tmp $row.repo
+                $dest = [IO.Path]::Combine($Root, $row.repo)
+                if (-not (Test-Path $srcDir))
+                {
+                    Write-Warning ("离线包中没有仓库：{0}" -f $row.repo)
+                    continue
+                }
+                if (Test-Path $dest)
+                {
+                    Write-Host ("跳过（已存在）：{0}" -f $row.repo) -ForegroundColor DarkGray
+                    continue
+                }
+                Move-Item -Path $srcDir -Destination $dest
+                Write-Host ("离线安装：{0}" -f $row.repo) -ForegroundColor Green
+            }
+        }
+        finally
+        {
+            if (Test-Path $tmp) { Remove-Item -Path $tmp -Recurse -Force }
+        }
+        return
+    }
+
     foreach ($row in $Targets)
     {
         $dest = [IO.Path]::Combine($Root, $row.repo)
@@ -422,8 +471,118 @@ function Show-Status
     }
 }
 
+# 删除技能库中已安装的仓（uninstall；只删技能库目录，启用目录用 disable 单独清理）
+function Invoke-Uninstall
+{
+    param($Targets)
+
+    $existing = @($Targets | Where-Object { Test-Path ([IO.Path]::Combine($Root, $_.repo)) })
+    if ($existing.Count -eq 0)
+    {
+        Write-Host '所选仓库均未安装，无需删除'
+        return
+    }
+
+    # 交互确认（-NonInteractive / -Force 跳过，便于脚本调用）
+    if (-not $NonInteractive -and -not $Force)
+    {
+        Write-Host ("将删除以下 {0} 个仓库（位于 {1}）：" -f $existing.Count, $Root) -ForegroundColor Yellow
+        $existing | ForEach-Object { Write-Host ("  - {0}" -f $_.repo) }
+        $answer = Read-Host '确认删除？输入 y 确认'
+        if ($answer -notmatch '^[yY]')
+        {
+            Write-Host '已取消删除'
+            return
+        }
+    }
+
+    foreach ($row in $existing)
+    {
+        $dest = [IO.Path]::Combine($Root, $row.repo)
+        Remove-Item -Path $dest -Recurse -Force
+        Write-Host ("已删除：{0}" -f $row.repo) -ForegroundColor Green
+    }
+}
+
+# 扫描本地安装状态；-Json 时输出网页可导入的 JSON
+function Show-Scan
+{
+    param($Catalog)
+
+    $repos = @()
+    foreach ($row in $Catalog)
+    {
+        $dest = [IO.Path]::Combine($Root, $row.repo)
+        $isInstalled = Test-Path $dest
+        $enabled = 0
+        $head = $null
+        $skillsRoot = [IO.Path]::Combine($Project, '.trae', 'skills')
+        if (Test-Path $skillsRoot)
+        {
+            $enabled = @(Get-ChildItem -Path $skillsRoot -Directory -Filter "wife-legal-$($row.repo)-*" -ErrorAction SilentlyContinue).Count
+        }
+        if ($isInstalled -and (Test-Path (Join-Path $dest '.git')))
+        {
+            $head = (git -C $dest rev-parse --short HEAD 2>$null)
+            if ($LASTEXITCODE -ne 0) { $head = $null }
+        }
+        $repos += [ordered]@{
+            repo = $row.repo
+            category = $row.category
+            large = $row.large
+            installed = $isInstalled
+            enabled = $enabled
+            head = $head
+        }
+    }
+
+    if ($Json)
+    {
+        $out = [ordered]@{
+            type = 'wife-legal-scan'
+            version = 1
+            scannedAt = (Get-Date).ToUniversalTime().ToString('o')
+            root = $Root
+            project = $Project
+            repos = $repos
+        }
+        $out | ConvertTo-Json -Depth 5 | Write-Output
+        return
+    }
+
+    foreach ($r in $repos)
+    {
+        $state = if ($r.installed) { '已安装' } else { '未安装' }
+        Write-Host ("{0,-48} {1,-6} 已启用 {2}" -f $r.repo, $state, $r.enabled)
+    }
+}
+
 # ---------- 主流程 ----------
 $catalog = Get-Catalog
+
+# 读取网页导出的选择配置（-Config）：仓库清单并入选择，root / org / topic / offline 可一并接管
+if ($Config)
+{
+    if (-not (Test-Path $Config))
+    {
+        throw "配置文件不存在：$Config"
+    }
+    $cfg = Get-Content -Path $Config -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $cfg.selected)
+    {
+        throw "配置文件里没有 selected 字段，确认是网页导出的 wife-legal-selection.json"
+    }
+    $cfgRepos = @($cfg.selected | ForEach-Object { $_.repo })
+    Write-Host ("已从配置读取 {0} 个仓库选择（{1}）" -f $cfgRepos.Count, $Config) -ForegroundColor Cyan
+    if ($Repo.Count -eq 0)
+    {
+        $Repo = $cfgRepos
+    }
+    if (-not $Root -and $cfg.root) { $Root = $cfg.root }
+    if ($cfg.org) { $Org = $cfg.org }
+    if ($cfg.topic) { $Topic = $cfg.topic }
+    if (-not $Offline -and $cfg.mode -eq 'offline') { $Offline = Join-Path $repoRoot 'wife-legal-offline-bundle.zip' }
+}
 
 # 用 topic 发现结果校验 catalog（发现多出的仓时提示补录）
 $discovered = Get-DiscoveredRepos
@@ -453,7 +612,12 @@ switch ($Action)
     }
     'status'
     {
-        Show-Status -Catalog $catalog
+        if ($Json) { Show-Scan -Catalog $catalog } else { Show-Status -Catalog $catalog }
+        break
+    }
+    'scan'
+    {
+        Show-Scan -Catalog $catalog
         break
     }
     default
@@ -471,10 +635,11 @@ switch ($Action)
 
         switch ($Action)
         {
-            'install' { Invoke-Install -Targets $targets }
-            'update'  { Invoke-Update  -Targets $targets }
-            'enable'  { Invoke-Enable  -Targets $targets }
-            'disable' { Invoke-Disable -Targets $targets }
+            'install'   { Invoke-Install   -Targets $targets }
+            'update'    { Invoke-Update    -Targets $targets }
+            'uninstall' { Invoke-Uninstall -Targets $targets }
+            'enable'    { Invoke-Enable    -Targets $targets }
+            'disable'   { Invoke-Disable   -Targets $targets }
         }
         break
     }
