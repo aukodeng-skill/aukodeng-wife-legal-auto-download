@@ -56,6 +56,10 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 $catalogPath = Join-Path $repoRoot 'catalog.tsv'
 
+# 从 cmd / bash 传入 "-Repo a,b" 时整串会作为一个元素，这里统一按逗号拆开并去空白
+$Repo = @($Repo | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+$Category = @($Category | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+
 if ($Help)
 {
     @'

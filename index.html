@@ -136,6 +136,8 @@ code{font-family:var(--mono)}
 .acts2 button:hover{color:#dbe4f3}
 .acts2 button.on{background:var(--brand);color:#fff}
 .cmdhead .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.cmdhead .x{width:28px;height:28px;border-radius:8px;border:1px solid #2b3550;background:#182034;color:#93a0bd;font-size:16px;line-height:1;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center}
+.cmdhead .x:hover{color:#fff;border-color:#3d4a6b;background:#222c44}
 .copy{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:7px 16px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
 .copy:hover{filter:brightness(1.08)}
 .copy.ok{background:var(--ok)}
@@ -215,6 +217,7 @@ code{font-family:var(--mono)}
             <div class="right">
                 <button class="export" id="exportBtn">导出配置</button>
                 <button class="copy" id="copyBtn">复制命令</button>
+                <button class="x" id="cmdClose" title="关闭（Esc）" aria-label="关闭">×</button>
             </div>
         </div>
         <pre id="cmdOut">（尚未选择任何技能仓）</pre>
@@ -726,6 +729,8 @@ document.getElementById("fab").onclick = () => {
     document.getElementById("cmdpanel").classList.add("open");
     buildCmd();
 };
+
+document.getElementById("cmdClose").onclick = () => document.getElementById("cmdpanel").classList.remove("open");
 
 document.getElementById("copyBtn").onclick = (e) => {
     const btn = e.currentTarget;
