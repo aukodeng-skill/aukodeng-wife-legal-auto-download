@@ -221,7 +221,7 @@ code{font-family:var(--mono)}
             <input type="text" id="root" placeholder="安装根目录（可选）">
             <span class="hint" id="hint"></span>
             <div class="right">
-                <button class="export" id="ccsBtn" title="用官方深链接把勾选的每个库注册为 CC Switch 的 Skill 仓库（一库一条记录，CC Switch 会自动同步库内技能）">导入 CC Switch 仓库</button>
+                <button class="export" id="ccsBtn" title="用官方深链接把勾选的每个库注册为 CC Switch 的 Skill 仓库：CC Switch 会把仓库里每个含 SKILL.md 的目录各算一条技能，所以勾一个库会出现多条；要一个库一条请用「下载 ZIP」">导入 CC Switch 仓库</button>
                 <button class="export" id="zipBtn" title="把勾选的每个技能库各打成 ZIP 里的一个库目录，可直接在 CC Switch 的「从 ZIP 安装」里导入">下载 ZIP</button>
                 <button class="export" id="exportBtn">导出配置</button>
                 <button class="copy" id="copyBtn">复制命令</button>
@@ -608,7 +608,7 @@ function render()
         let meta = '<div class="meta">';
         meta += skills ? '<span class="sk">' + skills + " 个技能</span>" : "<span>技能数未知</span>";
         if (upstream) meta += '<a href="https://github.com/' + esc(upstream) + '" target="_blank" rel="noopener">上游 ↗</a>';
-        meta += '<a class="ccs" href="' + esc(ccsLink(repo)) + '" title="把本库注册为 CC Switch 的 Skill 仓库（一库一条记录，库内技能自动同步）">导入 CC Switch ↗</a>';
+        meta += '<a class="ccs" href="' + esc(ccsLink(repo)) + '" title="把本库注册为 CC Switch 的 Skill 仓库：库内每个 SKILL.md 会各列成一条技能；要一个库一条请用「下载 ZIP」">导入 CC Switch ↗</a>';
         meta += "</div>";
 
         c.innerHTML = head + '<div class="note">' + esc(note) + "</div>" + meta;
@@ -778,8 +778,11 @@ const ZIP_POOL = 8;           // 并发下载数
 let zipBusy = false;
 
 // ===== 导入 CC Switch 仓库：用官方深链接把每个库注册成一个 Skill 仓库 =====
-// resource=skill 的深链接添加的是「Skill 仓库」而不是直接安装技能；注册后 CC Switch
-// 按仓库里的 SKILL.md 列出库内全部技能，所以一个库就是一条记录、内含 N 个技能
+// resource=skill 的深链接添加的是「Skill 仓库」而不是直接安装技能。CC Switch 扫描仓库时，
+// 某个目录含 SKILL.md 就只算一条并停止下钻，否则递归展开所有子目录——所以只有根目录
+// 带 SKILL.md 的仓库才是一条记录。本页的库（如 Legal-Skills-Chinese）技能都在
+// skills/、English/skills/ 下，注册后会被展开成每条子技能一条。要「一库一条」请用 ZIP：
+// ZIP 里给每个库根目录生成了库级 SKILL.md，安装时同样只算一条。
 const CCS_SCHEME = "ccswitch://v1/import?resource=skill&repo=";
 const CCS_GAP = 1500;   // 连续唤起 CC Switch 的间隔，太快会被浏览器/系统丢掉
 let ccsBusy = false;
@@ -846,7 +849,8 @@ function importToCcs()
         if (i >= libs.length)
         {
             stopCcs(true);
-            showCcsMsg("<b>已发起 " + libs.length + " 个库的导入</b><br>全部确认后，到 CC Switch 的「Skills」页选择要安装的技能。");
+            showCcsMsg("<b>已发起 " + libs.length + " 个库的导入</b><br>全部确认后，到 CC Switch 的「Skills」页选择要安装的技能。"
+                + "<br><span class=\"warn\">注意：仓库方式会把库内每个 SKILL.md 各列成一条（本页的库没有根级 SKILL.md，会展开成几十条）。要一个库只显示一条，请改用「下载 ZIP」，在 CC Switch 的「从 ZIP 安装」里导入。</span>");
             toast("已发起 " + libs.length + " 个库的导入");
             return;
         }
